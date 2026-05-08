@@ -193,13 +193,13 @@ h1{
 
     <div class="card">
     <h3>🎥 VISIBILITÉ / AUDIO EN DIRECT</h3>
-    <video id="liveVideo" autoplay playsinline controls style="
-        width:100%;
-        background:#000;
-        border-radius:12px;
-        border:1px solid #334155;
-        margin-bottom:10px;
-    "></video>
+<video id="liveVideo" autoplay playsinline controls style="
+    width:100%;
+    background:#000;
+    border-radius:12px;
+    border:1px solid #334155;
+    margin-bottom:10px;
+"></video>
 
     <div id="streamStatus" class="small">Aucun flux connecté</div>
     <button class="btn" onclick="connectSelectedStream()">Connecter au flux autorisé</button>
@@ -281,22 +281,25 @@ function connectSelectedStream(){
     document.getElementById("streamStatus").innerHTML =
         "Connexion au flux : " + remotePeerId;
 
-    navigator.mediaDevices.getUserMedia({video:false, audio:false})
-    .catch(()=>null)
-    .finally(()=>{
-        const call = dashboardPeer.call(remotePeerId, new MediaStream());
+    const call = dashboardPeer.call(remotePeerId, null);
 
-        call.on("stream", remoteStream=>{
-            const video = document.getElementById("liveVideo");
-            video.srcObject = remoteStream;
+    call.on("stream", remoteStream=>{
+        const video = document.getElementById("liveVideo");
+        video.srcObject = remoteStream;
+        video.muted = false;
+
+        video.play().catch(()=>{
             document.getElementById("streamStatus").innerHTML =
-                "✅ Flux audio/vidéo connecté : " + selectedObjectId;
+                "Flux reçu. Cliquez sur Play dans la vidéo.";
         });
 
-        call.on("error", err=>{
-            document.getElementById("streamStatus").innerHTML =
-                "❌ Erreur flux : " + err.message;
-        });
+        document.getElementById("streamStatus").innerHTML =
+            "✅ Flux audio/vidéo connecté : " + selectedObjectId;
+    });
+
+    call.on("error", err=>{
+        document.getElementById("streamStatus").innerHTML =
+            "❌ Erreur flux : " + err.message;
     });
 }
 
