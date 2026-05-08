@@ -244,6 +244,11 @@ dashboardPeer.on("open", id=>{
         "Centre vidéo prêt : " + id;
 });
 
+dashboardPeer.on("error", err=>{
+    document.getElementById("streamStatus").innerHTML =
+        "❌ Erreur centre vidéo : " + err.message;
+});
+
 function color(status){
     if(status === "danger") return "#ef4444";
     if(status === "watch") return "#facc15";
@@ -269,7 +274,7 @@ function connectStream(objectId){
     connectSelectedStream();
 }
 
-function connectSelectedStream(){
+async function connectSelectedStream(){
     if(!selectedObjectId){
         document.getElementById("streamStatus").innerHTML =
             "Sélectionnez d’abord un engin dans la liste.";
@@ -281,26 +286,44 @@ function connectSelectedStream(){
     document.getElementById("streamStatus").innerHTML =
         "Connexion au flux : " + remotePeerId;
 
-    const call = dashboardPeer.call(remotePeerId, null);
+    try{
+        const emptyStream = new MediaStream();
 
-    call.on("stream", remoteStream=>{
-        const video = document.getElementById("liveVideo");
-        video.srcObject = remoteStream;
-        video.muted = false;
+        const call = dashboardPeer.call(remotePeerId, emptyStream);
 
-        video.play().catch(()=>{
-            document.getElementById("streamStatus").innerHTML =
-                "Flux reçu. Cliquez sur Play dans la vidéo.";
+        call.on("stream", remoteStream=>{
+            const video = document.getElementById("liveVideo");
+
+            video.srcObject = remoteStream;
+            video.muted = false;
+            video.volume = 1;
+
+            video.play().then(()=>{
+                document.getElementById("streamStatus").innerHTML =
+                    "✅ Flux audio/vidéo connecté : " + selectedObjectId;
+            }).catch(()=>{
+                document.getElementById("streamStatus").innerHTML =
+                    "✅ Flux reçu. Cliquez sur ▶ Play dans la vidéo.";
+            });
         });
 
-        document.getElementById("streamStatus").innerHTML =
-            "✅ Flux audio/vidéo connecté : " + selectedObjectId;
-    });
+        call.on("error", err=>{
+            document.getElementById("streamStatus").innerHTML =
+                "❌ Erreur flux : " + err.message;
+        });
 
-    call.on("error", err=>{
+        setTimeout(()=>{
+            const video = document.getElementById("liveVideo");
+            if(!video.srcObject){
+                document.getElementById("streamStatus").innerHTML =
+                    "⚠️ Aucun flux reçu. Vérifiez que caméra/micro sont activés sur le téléphone.";
+            }
+        }, 7000);
+
+    }catch(e){
         document.getElementById("streamStatus").innerHTML =
-            "❌ Erreur flux : " + err.message;
-    });
+            "❌ Connexion impossible : " + e.message;
+    }
 }
 
 async function loadObjects(){
