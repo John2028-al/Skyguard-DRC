@@ -1,18 +1,15 @@
 from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
-import time, math, random, requests
+import time
+import math
 
 app = Flask(__name__)
 CORS(app)
 
-# Centre protégé par défaut : Beni
 BASE_LAT = 0.4911
 BASE_LON = 29.4731
 
 tracked = {}
-
-# Source ADS-B locale si dump1090 est installé
-ADS_B_URL = "http://127.0.0.1:8080/data/aircraft.json"
 
 
 def distance_m(lat1, lon1, lat2, lon2):
@@ -32,40 +29,10 @@ def classify(obj):
     if d < 800:
         return "danger", "Intrusion dans zone sensible"
 
-    if obj["speed"] < 8:
+    if obj.get("speed", 0) < 8:
         return "watch", "Objet lent ou stationnaire"
 
     return "normal", "RAS"
-
-
-
-
-
-def get_adsb_objects():
-    objects = []
-    try:
-        r = requests.get(ADS_B_URL, timeout=1.5)
-        data = r.json()
-
-        for a in data.get("aircraft", []):
-            if "lat" not in a or "lon" not in a:
-                continue
-
-            objects.append({
-                "id": (a.get("flight") or a.get("hex") or "ADS-B").strip(),
-                "type": "Avion ADS-B réel",
-                "lat": a["lat"],
-                "lon": a["lon"],
-                "speed": round(float(a.get("gs") or 0) * 1.852, 2),
-                "altitude": int(a.get("alt_baro") or 0),
-                "source": "ADS-B",
-                "timestamp": time.time()
-            })
-
-    except Exception:
-        pass
-
-    return objects
 
 
 @app.route("/")
@@ -80,63 +47,102 @@ def tracker():
 
 @app.route("/api/update", methods=["POST"])
 def update():
-    data = request.json
+    data = request.json or {}
 
-    object_id = data.get("id", "PHONE-01")
+    try:
+        object_id = data.get("id", "PHONE-01")
 
-    obj = {
-        "id": object_id,
-        "type": data.get("type", "Téléphone GPS autorisé"),
-        "lat": float(data["lat"]),
-        "lon": float(data["lon"]),
-        "speed": round(float(data.get("speed", 0) or 0) * 3.6, 2),
-        "altitude": round(float(data.get("altitude", 0) or 0), 2),
-        "source": "GPS MOBILE",
-        "timestamp": time.time()
-    }
+        obj = {
+            "id": object_id,
+            "type": data.get("type", "Téléphone GPS autorisé"),
+            "lat": float(data["lat"]),
+            "lon": float(data["lon"]),
+            "speed": round(float(data.get("speed", 0) or 0) * 3.6, 2),
+            "altitude": round(float(data.get("altitude", 0) or 0), 2),
+            "accuracy": round(float(data.get("accuracy", 0) or 0), 2),
+            "source": "GPS MOBILE",
+            "timestamp": time.time(),
+            "timestamp_mobile": data.get("timestamp_mobile", ""),
+            "media_peer_id": data.get("media_peer_id", ""),
+            "media_active": bool(data.get("media_active", False))
+        }
 
-    status, alert = classify(obj)
-    obj["status"] = status
-    obj["alert"] = alert
+        status, alert = classify(obj)
+        obj["status"] = status
+        obj["alert"] = alert
 
-    tracked[object_id] = obj
+        tracked[object_id] = obj
 
-    return jsonify({"success": True, "object": obj})
+        return jsonify({
+            "success": True,
+            "object": obj
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
 
 
 @app.route("/api/objects")
 def objects():
     now = time.time()
 
-    active_gps = [
+    active = [
         o for o in tracked.values()
-        if now - o["timestamp"] <= 60
+        if now - o["timestamp"] <= 90
     ]
 
-    for obj in active_gps:
+    for obj in active:
         status, alert = classify(obj)
         obj["status"] = status
         obj["alert"] = alert
+        obj["age_seconds"] = round(now - obj["timestamp"], 1)
+
+    normal = len([o for o in active if o["status"] == "normal"])
+    watch = len([o for o in active if o["status"] == "watch"])
+    danger = len([o for o in active if o["status"] == "danger"])
 
     return jsonify({
-        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "total": len(active_gps),
-        "objects": active_gps
+        "success": True,
+        "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "total": len(active),
+        "normal": normal,
+        "watch": watch,
+        "danger": danger,
+        "level": "ALERTE ROUGE" if danger > 0 else "OPÉRATIONNEL",
+        "objects": active
     })
 
 
 @app.route("/api/stats")
 def stats():
-    data = objects().json["objects"]
+    now = time.time()
+
+    active = [
+        o for o in tracked.values()
+        if now - o["timestamp"] <= 90
+    ]
 
     return jsonify({
-        "total": len(data),
-        "normal": len([o for o in data if o["status"] == "normal"]),
-        "watch": len([o for o in data if o["status"] == "watch"]),
-        "danger": len([o for o in data if o["status"] == "danger"]),
-        "level": "ALERTE ROUGE" if any(o["status"] == "danger" for o in data) else "OPÉRATIONNEL"
+        "success": True,
+        "total": len(active),
+        "normal": len([o for o in active if o["status"] == "normal"]),
+        "watch": len([o for o in active if o["status"] == "watch"]),
+        "danger": len([o for o in active if o["status"] == "danger"]),
+        "level": "ALERTE ROUGE" if any(o["status"] == "danger" for o in active) else "OPÉRATIONNEL"
+    })
+
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "service": "SkyGuard-DRC",
+        "time": time.strftime("%Y-%m-%d %H:%M:%S")
     })
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

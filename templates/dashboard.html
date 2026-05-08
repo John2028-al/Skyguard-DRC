@@ -5,8 +5,8 @@
 <title>SkyGuard-DRC</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
 <style>
 *{box-sizing:border-box}
 body{
@@ -39,7 +39,7 @@ h1{
 .layout{
     height:calc(100vh - 72px);
     display:grid;
-    grid-template-columns:340px 1fr 360px;
+    grid-template-columns:340px 1fr 380px;
 }
 .panel{
     background:#020617;
@@ -83,6 +83,10 @@ h1{
     margin-bottom:8px;
     border-radius:10px;
     font-size:13px;
+    cursor:pointer;
+}
+.object:hover{
+    border-color:#38bdf8;
 }
 .alert{
     background:#450a0a;
@@ -100,6 +104,12 @@ h1{
     border-radius:10px;
     text-decoration:none;
     font-weight:bold;
+    border:0;
+    width:100%;
+    cursor:pointer;
+}
+.btn:hover{
+    background:#0369a1;
 }
 .small{
     font-size:12px;
@@ -133,13 +143,21 @@ h1{
     from{transform:rotate(0deg)}
     to{transform:rotate(360deg)}
 }
+.status-line{
+    font-size:12px;
+    padding:8px;
+    border-radius:10px;
+    background:#020617;
+    border:1px solid #334155;
+    margin-top:8px;
+}
 </style>
 </head>
 
 <body>
 
 <header>
-    <h1>🛡️ SKYGUARD GLOBAL — CIVIL COMMAND CENTER</h1>
+    <h1>🛡️ SKYGUARD-DRC — CIVIL COMMAND CENTER</h1>
     <div id="level">INITIALISATION</div>
 </header>
 
@@ -170,8 +188,13 @@ h1{
         <h3>📱 TRACKER MONDIAL</h3>
         <a href="/tracker" target="_blank" class="btn">Ouvrir le tracker GPS</a>
         <p class="small">
-            À ouvrir sur téléphone via un lien HTTPS après déploiement en ligne.
+            À ouvrir sur téléphone via HTTPS. L’appareil doit autoriser GPS, caméra et micro.
         </p>
+    </div>
+
+    <div class="card">
+        <h3>🌐 ÉTAT SERVEUR</h3>
+        <div id="networkStatus" class="status-line">Connexion en cours...</div>
     </div>
 </aside>
 
@@ -192,24 +215,25 @@ h1{
     </div>
 
     <div class="card">
-    <h3>🎥 VISIBILITÉ / AUDIO EN DIRECT</h3>
-<video id="liveVideo" autoplay playsinline controls style="
-    width:100%;
-    background:#000;
-    border-radius:12px;
-    border:1px solid #334155;
-    margin-bottom:10px;
-"></video>
+        <h3>🎥 VISIBILITÉ / AUDIO EN DIRECT</h3>
 
-    <div id="streamStatus" class="small">Aucun flux connecté</div>
-    <button class="btn" onclick="connectSelectedStream()">Connecter au flux autorisé</button>
-</div>
+        <video id="liveVideo" autoplay playsinline controls style="
+            width:100%;
+            background:#000;
+            border-radius:12px;
+            border:1px solid #334155;
+            margin-bottom:10px;
+        "></video>
+
+        <div id="streamStatus" class="small">Initialisation vidéo...</div>
+        <button class="btn" onclick="connectSelectedStream()">Connecter au flux autorisé</button>
+    </div>
 
     <div class="card">
         <h3>MISSION</h3>
         <p class="small">
             Plateforme civile pour surveillance autorisée : GPS mobile,
-            ADS-B, simulation, zones sensibles, alertes et analyse temps réel.
+            zones sensibles, alertes, coordonnées exactes et visibilité audio/vidéo volontaire.
         </p>
     </div>
 </aside>
@@ -222,7 +246,7 @@ h1{
 const map = L.map('map').setView([0.4911,29.4731], 7);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'SkyGuard Global | OpenStreetMap'
+    attribution:'SkyGuard-DRC | OpenStreetMap'
 }).addTo(map);
 
 L.circle([0.4911,29.4731],{
@@ -235,12 +259,15 @@ L.circle([0.4911,29.4731],{
 let markers = {};
 let trails = {};
 let trailPoints = {};
-let selectedObjectId = null;
 
-const dashboardPeer = new Peer("dashboard-skyguard-drc");
+let selectedObjectId = null;
+let selectedPeerId = null;
 
 let dashboardPeer = null;
 let dashboardPeerReady = false;
+
+let isRefreshing = false;
+let failedRequests = 0;
 
 function initDashboardPeer(){
     dashboardPeer = new Peer("dashboard-skyguard-drc-" + Math.floor(Math.random() * 100000));
@@ -267,11 +294,6 @@ function initDashboardPeer(){
 
 initDashboardPeer();
 
-dashboardPeer.on("error", err=>{
-    document.getElementById("streamStatus").innerHTML =
-        "❌ Erreur centre vidéo : " + err.message;
-});
-
 function color(status){
     if(status === "danger") return "#ef4444";
     if(status === "watch") return "#facc15";
@@ -279,11 +301,11 @@ function color(status){
 }
 
 function icon(obj){
-    let emoji = "🟢✈️";
+    let emoji = "🟢📱";
+
     if(obj.status === "danger") emoji = "🔴🚨";
     else if(obj.status === "watch") emoji = "🟡🛰️";
     else if(obj.source === "GPS MOBILE") emoji = "🟢📱";
-    else if(obj.source === "ADS-B") emoji = "🟢✈️";
 
     return L.divIcon({
         html:`<div style="font-size:24px">${emoji}</div>`,
@@ -292,8 +314,9 @@ function icon(obj){
     });
 }
 
-function connectStream(objectId){
+function connectStream(objectId, peerId){
     selectedObjectId = objectId;
+    selectedPeerId = peerId || null;
     connectSelectedStream();
 }
 
@@ -310,19 +333,18 @@ async function connectSelectedStream(){
         return;
     }
 
-    const remotePeerId = "tracker-" + selectedObjectId;
+    const remotePeerId = selectedPeerId || ("tracker-" + selectedObjectId);
 
     document.getElementById("streamStatus").innerHTML =
         "Connexion au flux : " + remotePeerId;
 
     try{
         const emptyStream = new MediaStream();
-
         const call = dashboardPeer.call(remotePeerId, emptyStream);
 
         if(!call){
             document.getElementById("streamStatus").innerHTML =
-                "❌ Appel impossible. Vérifiez que le téléphone affiche : Diffusion temps réel active.";
+                "❌ Appel impossible. Vérifiez que caméra/micro sont actifs sur le téléphone.";
             return;
         }
 
@@ -367,8 +389,34 @@ async function connectSelectedStream(){
 }
 
 async function loadObjects(){
-    const res = await fetch('/api/objects');
+    const res = await fetch('/api/objects', {
+        cache:"no-store",
+        headers:{
+            "Accept":"application/json"
+        }
+    });
+
+    if(!res.ok){
+        throw new Error("Erreur API objects : " + res.status);
+    }
+
     const data = await res.json();
+
+    document.getElementById("total").innerText = data.total;
+    document.getElementById("normal").innerText = data.normal;
+    document.getElementById("watch").innerText = data.watch;
+    document.getElementById("danger").innerText = data.danger;
+
+    const level = document.getElementById("level");
+    level.innerText = data.level;
+
+    if(data.danger > 0){
+        level.style.background = "#7f1d1d";
+        level.style.color = "#fecaca";
+    }else{
+        level.style.background = "#064e3b";
+        level.style.color = "#a7f3d0";
+    }
 
     let alerts = "";
     let list = "";
@@ -382,6 +430,7 @@ async function loadObjects(){
 
         const latitudeExacte = Number(o.lat).toFixed(7);
         const longitudeExacte = Number(o.lon).toFixed(7);
+        const peerId = o.media_peer_id || "";
 
         if(!markers[o.id]){
             markers[o.id] = L.marker(pos,{icon:icon(o)}).addTo(map);
@@ -398,7 +447,6 @@ async function loadObjects(){
 
             trailPoints[o.id].push(pos);
 
-            // Réinitialisation légère : garder seulement les 80 dernières positions
             if(trailPoints[o.id].length > 80){
                 trailPoints[o.id].shift();
             }
@@ -413,8 +461,11 @@ async function loadObjects(){
             Source : ${o.source}<br>
             Latitude exacte : ${latitudeExacte}<br>
             Longitude exacte : ${longitudeExacte}<br>
+            Précision GPS : ${o.accuracy || 0} m<br>
             Vitesse : ${o.speed} km/h<br>
             Altitude : ${o.altitude} m<br>
+            Média : ${o.media_active ? "Actif" : "Inactif"}<br>
+            Peer ID : ${peerId || "Aucun"}<br>
             Statut : ${o.status}<br>
             Alerte : ${o.alert}
         `);
@@ -424,31 +475,34 @@ async function loadObjects(){
                 <div class="alert">
                     🚨 <b>${o.id}</b><br>
                     ${o.alert}<br>
-                    Source : ${o.source}<br>
                     Lat : ${latitudeExacte}<br>
-                    Lon : ${longitudeExacte}
+                    Lon : ${longitudeExacte}<br>
+                    Média : ${o.media_active ? "Actif" : "Inactif"}
                 </div>
             `;
         }
 
         list += `
-            <div class="object" onclick="selectedObjectId='${o.id}'">
+            <div class="object" onclick="selectedObjectId='${o.id}'; selectedPeerId='${peerId}';">
                 <b>${o.id}</b><br>
                 Source : ${o.source}<br>
                 Statut : <span style="color:${c}">${o.status}</span><br>
                 Latitude : ${latitudeExacte}<br>
                 Longitude : ${longitudeExacte}<br>
+                Précision : ${o.accuracy || 0} m<br>
                 Vitesse : ${o.speed} km/h<br>
                 Altitude : ${o.altitude} m<br>
+                Média : ${o.media_active ? "✅ actif" : "❌ inactif"}<br>
+                Peer : ${peerId || "Aucun"}<br>
+                Dernière MAJ : ${o.age_seconds || 0}s<br>
                 ${o.alert}<br><br>
-                <button class="btn" onclick="connectStream('${o.id}')">
+                <button class="btn" onclick="event.stopPropagation(); connectStream('${o.id}', '${peerId}')">
                     🎥 Voir audio/vidéo
                 </button>
             </div>
         `;
     });
 
-    // Supprimer automatiquement les objets disparus
     Object.keys(markers).forEach(id=>{
         if(!activeIds.includes(id)){
             map.removeLayer(markers[id]);
@@ -461,37 +515,49 @@ async function loadObjects(){
 
     document.getElementById("alerts").innerHTML = alerts || "Aucune alerte";
     document.getElementById("list").innerHTML = list || "Aucun objet actif";
+
+    document.getElementById("networkStatus").innerHTML =
+        `✅ Serveur connecté<br>Dernière mise à jour : ${data.server_time}`;
+
+    failedRequests = 0;
 }
 
-async function loadStats(){
-    const res = await fetch('/api/stats');
-    const s = await res.json();
+async function refresh(){
+    if(isRefreshing) return;
 
-    document.getElementById("total").innerText = s.total;
-    document.getElementById("normal").innerText = s.normal;
-    document.getElementById("watch").innerText = s.watch;
-    document.getElementById("danger").innerText = s.danger;
+    isRefreshing = true;
 
-    const level = document.getElementById("level");
-    level.innerText = s.level;
+    try{
+        await loadObjects();
 
-    if(s.danger > 0){
-        level.style.background = "#7f1d1d";
-        level.style.color = "#fecaca";
-    }else{
-        level.style.background = "#064e3b";
-        level.style.color = "#a7f3d0";
+    }catch(e){
+        failedRequests++;
+
+        console.warn("Erreur réseau SkyGuard :", e.message);
+
+        const level = document.getElementById("level");
+        level.innerText = "CONNEXION INSTABLE";
+        level.style.background = "#854d0e";
+        level.style.color = "#fef3c7";
+
+        document.getElementById("networkStatus").innerHTML =
+            `⚠️ Connexion instable<br>${e.message}<br>Essai : ${failedRequests}`;
+
+        if(failedRequests >= 5){
+            document.getElementById("alerts").innerHTML =
+                `<div class="alert">
+                    ⚠️ Connexion instable avec le serveur Render.<br>
+                    Le système réessaie automatiquement.
+                </div>`;
+        }
+
+    }finally{
+        isRefreshing = false;
     }
 }
 
-function refresh(){
-    loadObjects();
-    loadStats();
-}
-
-// Réinitialisation / actualisation automatique chaque seconde
 refresh();
-setInterval(refresh, 1000);
+setInterval(refresh, 2500);
 </script>
 
 </body>
