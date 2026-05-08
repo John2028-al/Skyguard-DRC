@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SkyGuard Tracker</title>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
 <style>
 *{box-sizing:border-box}
 
@@ -246,7 +246,115 @@ let sendCounter = 0;
 let isTracking = false;
 
 let mediaStream = null;
-let peer = null;
+let pc = null;
+let currentDashboardSid = null;
+
+let socket = io();
+
+socket.on("connect", ()=>{
+    document.getElementById("mediaStatus").innerHTML =
+        "✅ Socket connecté au serveur";
+});
+
+socket.on("disconnect", ()=>{
+    document.getElementById("mediaStatus").innerHTML =
+        "⚠️ Socket déconnecté du serveur";
+});
+
+socket.on("tracker_registered", data=>{
+    document.getElementById("mediaStatus").innerHTML +=
+        `<br><span class="good">📡 Tracker enregistré : ${data.id}</span>`;
+});
+
+socket.on("incoming_call", async data=>{
+    currentDashboardSid = data.dashboard_sid;
+
+    if(!mediaStream){
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="bad">Caméra/micro non activés. Activez d’abord le média.</span>`;
+        return;
+    }
+
+    if(pc){
+        pc.close();
+        pc = null;
+    }
+
+    pc = new RTCPeerConnection({
+        iceServers:[
+            {urls:"stun:stun.l.google.com:19302"},
+            {urls:"stun:stun1.l.google.com:19302"}
+        ]
+    });
+
+    mediaStream.getTracks().forEach(track=>{
+        pc.addTrack(track, mediaStream);
+    });
+
+    pc.onicecandidate = event=>{
+        if(event.candidate && currentDashboardSid){
+            socket.emit("webrtc_ice", {
+                to: currentDashboardSid,
+                from: socket.id,
+                candidate: event.candidate
+            });
+        }
+    };
+
+    pc.onconnectionstatechange = ()=>{
+        document.getElementById("mediaStatus").innerHTML =
+            `État WebRTC : ${pc.connectionState}`;
+
+        if(pc.connectionState === "connected"){
+            document.getElementById("mediaStatus").innerHTML =
+                `<span class="good">✅ Flux envoyé au dashboard</span>`;
+        }
+
+        if(pc.connectionState === "failed"){
+            document.getElementById("mediaStatus").innerHTML =
+                `<span class="bad">❌ WebRTC échoué. Réessayez.</span>`;
+        }
+    };
+
+    try{
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        socket.emit("webrtc_offer", {
+            to: currentDashboardSid,
+            from: socket.id,
+            offer: offer
+        });
+
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="good">📡 Offre WebRTC envoyée au dashboard</span>`;
+
+    }catch(e){
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="bad">Erreur WebRTC :</span> ${e.message}`;
+    }
+});
+
+socket.on("webrtc_answer", async data=>{
+    if(pc){
+        try{
+            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        }catch(e){
+            document.getElementById("mediaStatus").innerHTML =
+                `<span class="bad">Erreur réponse WebRTC :</span> ${e.message}`;
+        }
+    }
+});
+
+socket.on("webrtc_ice", async data=>{
+    if(pc && data.candidate){
+        try{
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }catch(e){
+            console.warn("Erreur ICE tracker:", e.message);
+        }
+    }
+});
 
 function setMainStatus(message, type="wait"){
     document.getElementById("mainStatus").innerHTML =
@@ -276,7 +384,6 @@ async function sendToServer(){
         speed: lastPosition.coords.speed || 0,
         altitude: lastPosition.coords.altitude || 0,
         accuracy: lastPosition.coords.accuracy || 0,
-        media_peer_id: "tracker-" + id,
         media_active: mediaStream ? true : false,
         timestamp_mobile: new Date().toISOString()
     };
@@ -403,7 +510,7 @@ function stopTracking(){
 async function startMedia(){
     if(mediaStream){
         document.getElementById("mediaStatus").innerHTML =
-            `<span class="good">✅ Flux déjà actif</span>`;
+            `<span class="good">✅ Média déjà actif</span>`;
         return;
     }
 
@@ -433,46 +540,18 @@ async function startMedia(){
         video.srcObject = mediaStream;
         video.style.display = "block";
 
-        document.getElementById("mediaStatus").innerHTML =
-            `<span class="good">✅ Caméra et micro actifs</span>`;
+        const id = document.getElementById("objectId").value || "PHONE-01";
 
-        startMediaBroadcast();
+        socket.emit("register_tracker", {id:id});
+
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="good">✅ Caméra/micro actifs</span><br>
+             WebRTC prêt pour : ${id}`;
 
     }catch(e){
         document.getElementById("mediaStatus").innerHTML =
             `<span class="bad">❌ Autorisation refusée :</span><br>${e.message}`;
     }
-}
-
-function startMediaBroadcast(){
-    if(!mediaStream){
-        return;
-    }
-
-    const id = document.getElementById("objectId").value || "PHONE-01";
-    const peerId = "tracker-" + id;
-
-    if(peer){
-        peer.destroy();
-        peer = null;
-    }
-
-    peer = new Peer(peerId);
-
-    peer.on("open", ()=>{
-        document.getElementById("mediaStatus").innerHTML +=
-            `<br><span class="good">📡 Diffusion temps réel active</span><br>
-             ID flux : ${peerId}`;
-    });
-
-    peer.on("call", call=>{
-        call.answer(mediaStream);
-    });
-
-    peer.on("error", err=>{
-        document.getElementById("mediaStatus").innerHTML =
-            `<span class="bad">❌ Erreur PeerJS :</span><br>${err.message}`;
-    });
 }
 
 function stopMedia(){
@@ -481,9 +560,9 @@ function stopMedia(){
         mediaStream = null;
     }
 
-    if(peer){
-        peer.destroy();
-        peer = null;
+    if(pc){
+        pc.close();
+        pc = null;
     }
 
     const video = document.getElementById("videoPreview");
