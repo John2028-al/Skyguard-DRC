@@ -2,5 +2,6 @@ flask
 flask-cors
 flask-socketio
 python-socketio
-eventlet
 gunicorn
+gevent
+gevent-websocket

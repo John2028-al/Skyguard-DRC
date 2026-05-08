@@ -15,7 +15,13 @@ import math
 app = Flask(__name__)
 CORS(app)
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="eventlet",
+    ping_timeout=60,
+    ping_interval=25
+)
 
 BASE_LAT = 0.4911
 BASE_LON = 29.4731
@@ -172,6 +178,8 @@ def disconnect():
     for object_id, tracker_sid in list(tracker_sockets.items()):
         if tracker_sid == sid:
             del tracker_sockets[object_id]
+
+
 
 
 if __name__ == "__main__":
