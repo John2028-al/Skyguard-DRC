@@ -5,152 +5,32 @@
 <title>SkyGuard-DRC</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
 <style>
 *{box-sizing:border-box}
-body{
-    margin:0;
-    background:#020617;
-    color:#e0f2fe;
-    font-family:Consolas, monospace;
-}
-header{
-    height:72px;
-    background:linear-gradient(90deg,#020617,#0f172a,#111827);
-    border-bottom:1px solid #38bdf8;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:0 24px;
-}
-h1{
-    font-size:22px;
-    margin:0;
-    color:#67e8f9;
-}
-#level{
-    padding:10px 18px;
-    border-radius:30px;
-    background:#064e3b;
-    color:#a7f3d0;
-    font-weight:bold;
-}
-.layout{
-    height:calc(100vh - 72px);
-    display:grid;
-    grid-template-columns:340px 1fr 380px;
-}
-.panel{
-    background:#020617;
-    padding:16px;
-    border-right:1px solid #1e3a8a;
-    overflow:auto;
-}
-.panel.right{
-    border-right:none;
-    border-left:1px solid #1e3a8a;
-}
-.card{
-    background:linear-gradient(180deg,#0f172a,#020617);
-    border:1px solid #1e40af;
-    border-radius:18px;
-    padding:16px;
-    margin-bottom:14px;
-    box-shadow:0 0 25px rgba(14,165,233,.12);
-}
-.card h3{
-    margin:0 0 10px;
-    color:#67e8f9;
-    font-size:14px;
-}
-.big{
-    font-size:34px;
-    font-weight:bold;
-}
-.green{color:#22c55e}
-.yellow{color:#facc15}
-.red{color:#ef4444}
-#map{
-    height:100%;
-    width:100%;
-    background:#000;
-}
-.object{
-    background:#0f172a;
-    border:1px solid #334155;
-    padding:10px;
-    margin-bottom:8px;
-    border-radius:10px;
-    font-size:13px;
-    cursor:pointer;
-}
-.object:hover{
-    border-color:#38bdf8;
-}
-.alert{
-    background:#450a0a;
-    border-left:4px solid #ef4444;
-    padding:10px;
-    margin-bottom:10px;
-    border-radius:10px;
-}
-.btn{
-    display:block;
-    background:#0284c7;
-    color:white;
-    text-align:center;
-    padding:12px;
-    border-radius:10px;
-    text-decoration:none;
-    font-weight:bold;
-    border:0;
-    width:100%;
-    cursor:pointer;
-}
-.btn:hover{
-    background:#0369a1;
-}
-.small{
-    font-size:12px;
-    color:#94a3b8;
-    line-height:1.5;
-}
-.radar{
-    position:absolute;
-    width:500px;
-    height:500px;
-    border-radius:50%;
-    border:1px solid rgba(34,211,238,.35);
-    top:50%;
-    left:50%;
-    transform:translate(-50%,-50%);
-    pointer-events:none;
-    z-index:900;
-}
-.radar:after{
-    content:"";
-    position:absolute;
-    top:50%;
-    left:50%;
-    width:50%;
-    height:2px;
-    background:linear-gradient(90deg,#22d3ee,transparent);
-    transform-origin:left center;
-    animation:spin 3s linear infinite;
-}
-@keyframes spin{
-    from{transform:rotate(0deg)}
-    to{transform:rotate(360deg)}
-}
-.status-line{
-    font-size:12px;
-    padding:8px;
-    border-radius:10px;
-    background:#020617;
-    border:1px solid #334155;
-    margin-top:8px;
-}
+body{margin:0;background:#020617;color:#e0f2fe;font-family:Consolas,monospace}
+header{height:72px;background:linear-gradient(90deg,#020617,#0f172a,#111827);border-bottom:1px solid #38bdf8;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+h1{font-size:22px;margin:0;color:#67e8f9}
+#level{padding:10px 18px;border-radius:30px;background:#064e3b;color:#a7f3d0;font-weight:bold}
+.layout{height:calc(100vh - 72px);display:grid;grid-template-columns:340px 1fr 380px}
+.panel{background:#020617;padding:16px;border-right:1px solid #1e3a8a;overflow:auto}
+.panel.right{border-right:none;border-left:1px solid #1e3a8a}
+.card{background:linear-gradient(180deg,#0f172a,#020617);border:1px solid #1e40af;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 0 25px rgba(14,165,233,.12)}
+.card h3{margin:0 0 10px;color:#67e8f9;font-size:14px}
+.big{font-size:34px;font-weight:bold}
+.green{color:#22c55e}.yellow{color:#facc15}.red{color:#ef4444}
+#map{height:100%;width:100%;background:#000}
+.object{background:#0f172a;border:1px solid #334155;padding:10px;margin-bottom:8px;border-radius:10px;font-size:13px;cursor:pointer}
+.object:hover{border-color:#38bdf8}
+.alert{background:#450a0a;border-left:4px solid #ef4444;padding:10px;margin-bottom:10px;border-radius:10px}
+.btn{display:block;background:#0284c7;color:white;text-align:center;padding:12px;border-radius:10px;text-decoration:none;font-weight:bold;border:0;width:100%;cursor:pointer}
+.btn:hover{background:#0369a1}
+.small{font-size:12px;color:#94a3b8;line-height:1.5}
+.status-line{font-size:12px;padding:8px;border-radius:10px;background:#020617;border:1px solid #334155;margin-top:8px}
+.radar{position:absolute;width:500px;height:500px;border-radius:50%;border:1px solid rgba(34,211,238,.35);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:900}
+.radar:after{content:"";position:absolute;top:50%;left:50%;width:50%;height:2px;background:linear-gradient(90deg,#22d3ee,transparent);transform-origin:left center;animation:spin 3s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 </style>
 </head>
 
@@ -164,32 +44,15 @@ h1{
 <div class="layout">
 
 <aside class="panel">
-    <div class="card">
-        <h3>TOTAL OBJETS</h3>
-        <div class="big" id="total">0</div>
-    </div>
-
-    <div class="card">
-        <h3>NORMAUX</h3>
-        <div class="big green" id="normal">0</div>
-    </div>
-
-    <div class="card">
-        <h3>SOUS OBSERVATION</h3>
-        <div class="big yellow" id="watch">0</div>
-    </div>
-
-    <div class="card">
-        <h3>DANGER</h3>
-        <div class="big red" id="danger">0</div>
-    </div>
+    <div class="card"><h3>TOTAL OBJETS</h3><div class="big" id="total">0</div></div>
+    <div class="card"><h3>NORMAUX</h3><div class="big green" id="normal">0</div></div>
+    <div class="card"><h3>SOUS OBSERVATION</h3><div class="big yellow" id="watch">0</div></div>
+    <div class="card"><h3>DANGER</h3><div class="big red" id="danger">0</div></div>
 
     <div class="card">
         <h3>📱 TRACKER MONDIAL</h3>
         <a href="/tracker" target="_blank" class="btn">Ouvrir le tracker GPS</a>
-        <p class="small">
-            À ouvrir sur téléphone via HTTPS. L’appareil doit autoriser GPS, caméra et micro.
-        </p>
+        <p class="small">À ouvrir sur téléphone via HTTPS. L’appareil doit autoriser GPS, caméra et micro.</p>
     </div>
 
     <div class="card">
@@ -216,25 +79,14 @@ h1{
 
     <div class="card">
         <h3>🎥 VISIBILITÉ / AUDIO EN DIRECT</h3>
-
-        <video id="liveVideo" autoplay playsinline controls style="
-            width:100%;
-            background:#000;
-            border-radius:12px;
-            border:1px solid #334155;
-            margin-bottom:10px;
-        "></video>
-
-        <div id="streamStatus" class="small">Initialisation vidéo...</div>
+        <video id="liveVideo" autoplay playsinline controls style="width:100%;background:#000;border-radius:12px;border:1px solid #334155;margin-bottom:10px;"></video>
+        <div id="streamStatus" class="small">Initialisation WebRTC...</div>
         <button class="btn" onclick="connectSelectedStream()">Connecter au flux autorisé</button>
     </div>
 
     <div class="card">
         <h3>MISSION</h3>
-        <p class="small">
-            Plateforme civile pour surveillance autorisée : GPS mobile,
-            zones sensibles, alertes, coordonnées exactes et visibilité audio/vidéo volontaire.
-        </p>
+        <p class="small">Plateforme civile pour surveillance autorisée : GPS mobile, zones sensibles, alertes, coordonnées exactes et visibilité audio/vidéo volontaire.</p>
     </div>
 </aside>
 
@@ -259,40 +111,61 @@ L.circle([0.4911,29.4731],{
 let markers = {};
 let trails = {};
 let trailPoints = {};
-
 let selectedObjectId = null;
-let selectedPeerId = null;
 
-let dashboardPeer = null;
-let dashboardPeerReady = false;
+let socket = io();
+let pc = null;
+let currentTrackerSid = null;
 
 let isRefreshing = false;
 let failedRequests = 0;
 
-function initDashboardPeer(){
-    dashboardPeer = new Peer("dashboard-skyguard-drc-" + Math.floor(Math.random() * 100000));
+socket.on("connect", ()=>{
+    socket.emit("register_dashboard");
+    document.getElementById("streamStatus").innerHTML =
+        "✅ Dashboard connecté au serveur WebRTC";
+});
 
-    dashboardPeer.on("open", id=>{
-        dashboardPeerReady = true;
+socket.on("disconnect", ()=>{
+    document.getElementById("streamStatus").innerHTML =
+        "⚠️ Dashboard déconnecté du serveur WebRTC";
+});
+
+socket.on("webrtc_error", data=>{
+    document.getElementById("streamStatus").innerHTML =
+        "❌ " + data.message;
+});
+
+socket.on("webrtc_offer", async data=>{
+    currentTrackerSid = data.from;
+
+    if(!pc){
         document.getElementById("streamStatus").innerHTML =
-            "✅ Centre vidéo prêt : " + id;
-    });
+            "❌ Connexion WebRTC non préparée.";
+        return;
+    }
 
-    dashboardPeer.on("error", err=>{
-        dashboardPeerReady = false;
-        document.getElementById("streamStatus").innerHTML =
-            "❌ Erreur centre vidéo : " + err.message;
-    });
+    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
 
-    dashboardPeer.on("disconnected", ()=>{
-        dashboardPeerReady = false;
-        document.getElementById("streamStatus").innerHTML =
-            "⚠️ Centre vidéo déconnecté. Reconnexion...";
-        dashboardPeer.reconnect();
-    });
-}
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
 
-initDashboardPeer();
+    socket.emit("webrtc_answer", {
+        to:data.from,
+        from:socket.id,
+        answer:answer
+    });
+});
+
+socket.on("webrtc_ice", async data=>{
+    if(pc && data.candidate){
+        try{
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }catch(e){
+            console.warn("Erreur ICE:", e.message);
+        }
+    }
+});
 
 function color(status){
     if(status === "danger") return "#ef4444";
@@ -302,10 +175,8 @@ function color(status){
 
 function icon(obj){
     let emoji = "🟢📱";
-
     if(obj.status === "danger") emoji = "🔴🚨";
     else if(obj.status === "watch") emoji = "🟡🛰️";
-    else if(obj.source === "GPS MOBILE") emoji = "🟢📱";
 
     return L.divIcon({
         html:`<div style="font-size:24px">${emoji}</div>`,
@@ -314,9 +185,8 @@ function icon(obj){
     });
 }
 
-function connectStream(objectId, peerId){
+function connectStream(objectId){
     selectedObjectId = objectId;
-    selectedPeerId = peerId || null;
     connectSelectedStream();
 }
 
@@ -327,73 +197,76 @@ async function connectSelectedStream(){
         return;
     }
 
-    if(!dashboardPeer || !dashboardPeerReady){
-        document.getElementById("streamStatus").innerHTML =
-            "Centre vidéo pas encore prêt. Attendez 2 secondes puis réessayez.";
-        return;
+    if(pc){
+        pc.close();
+        pc = null;
     }
 
-    const remotePeerId = selectedPeerId || ("tracker-" + selectedObjectId);
+    currentTrackerSid = null;
 
     document.getElementById("streamStatus").innerHTML =
-        "Connexion au flux : " + remotePeerId;
+        "Connexion WebRTC vers : " + selectedObjectId;
 
-    try{
-        const emptyStream = new MediaStream();
-        const call = dashboardPeer.call(remotePeerId, emptyStream);
+    pc = new RTCPeerConnection({
+        iceServers:[
+            {urls:"stun:stun.l.google.com:19302"},
+            {urls:"stun:stun1.l.google.com:19302"}
+        ]
+    });
 
-        if(!call){
+    pc.ontrack = event=>{
+        const video = document.getElementById("liveVideo");
+        video.srcObject = event.streams[0];
+
+        video.play().then(()=>{
             document.getElementById("streamStatus").innerHTML =
-                "❌ Appel impossible. Vérifiez que caméra/micro sont actifs sur le téléphone.";
-            return;
+                "✅ Flux audio/vidéo reçu : " + selectedObjectId;
+        }).catch(()=>{
+            document.getElementById("streamStatus").innerHTML =
+                "✅ Flux reçu. Cliquez sur ▶ Play.";
+        });
+    };
+
+    pc.onicecandidate = event=>{
+        if(event.candidate && currentTrackerSid){
+            socket.emit("webrtc_ice", {
+                to:currentTrackerSid,
+                from:socket.id,
+                candidate:event.candidate
+            });
+        }
+    };
+
+    pc.onconnectionstatechange = ()=>{
+        document.getElementById("streamStatus").innerHTML =
+            "État WebRTC : " + pc.connectionState;
+
+        if(pc.connectionState === "connected"){
+            document.getElementById("streamStatus").innerHTML =
+                "✅ Connexion WebRTC active : " + selectedObjectId;
         }
 
-        call.on("stream", remoteStream=>{
-            const video = document.getElementById("liveVideo");
-
-            video.srcObject = remoteStream;
-            video.muted = false;
-            video.volume = 1;
-
-            video.play().then(()=>{
-                document.getElementById("streamStatus").innerHTML =
-                    "✅ Flux audio/vidéo connecté : " + selectedObjectId;
-            }).catch(()=>{
-                document.getElementById("streamStatus").innerHTML =
-                    "✅ Flux reçu. Cliquez sur ▶ Play dans la vidéo.";
-            });
-        });
-
-        call.on("error", err=>{
+        if(pc.connectionState === "failed"){
             document.getElementById("streamStatus").innerHTML =
-                "❌ Erreur flux : " + err.message;
-        });
+                "❌ Connexion WebRTC échouée. Réessayez ou utilisez le même réseau.";
+        }
+    };
 
-        call.on("close", ()=>{
+    socket.emit("call_tracker", {id:selectedObjectId});
+
+    setTimeout(()=>{
+        const video = document.getElementById("liveVideo");
+        if(!video.srcObject){
             document.getElementById("streamStatus").innerHTML =
-                "⚠️ Flux fermé.";
-        });
-
-        setTimeout(()=>{
-            const video = document.getElementById("liveVideo");
-            if(!video.srcObject){
-                document.getElementById("streamStatus").innerHTML =
-                    "⚠️ Aucun flux reçu. Activez caméra/micro sur le téléphone puis réessayez.";
-            }
-        }, 7000);
-
-    }catch(e){
-        document.getElementById("streamStatus").innerHTML =
-            "❌ Connexion impossible : " + e.message;
-    }
+                "⚠️ Aucun flux reçu. Activez caméra/micro sur le téléphone puis réessayez.";
+        }
+    }, 10000);
 }
 
 async function loadObjects(){
     const res = await fetch('/api/objects', {
         cache:"no-store",
-        headers:{
-            "Accept":"application/json"
-        }
+        headers:{"Accept":"application/json"}
     });
 
     if(!res.ok){
@@ -427,10 +300,8 @@ async function loadObjects(){
 
         const pos = [o.lat,o.lon];
         const c = color(o.status);
-
         const latitudeExacte = Number(o.lat).toFixed(7);
         const longitudeExacte = Number(o.lon).toFixed(7);
-        const peerId = o.media_peer_id || "";
 
         if(!markers[o.id]){
             markers[o.id] = L.marker(pos,{icon:icon(o)}).addTo(map);
@@ -465,7 +336,7 @@ async function loadObjects(){
             Vitesse : ${o.speed} km/h<br>
             Altitude : ${o.altitude} m<br>
             Média : ${o.media_active ? "Actif" : "Inactif"}<br>
-            Peer ID : ${peerId || "Aucun"}<br>
+            WebRTC : ${o.media_online ? "En ligne" : "Hors ligne"}<br>
             Statut : ${o.status}<br>
             Alerte : ${o.alert}
         `);
@@ -477,13 +348,14 @@ async function loadObjects(){
                     ${o.alert}<br>
                     Lat : ${latitudeExacte}<br>
                     Lon : ${longitudeExacte}<br>
-                    Média : ${o.media_active ? "Actif" : "Inactif"}
+                    Média : ${o.media_active ? "Actif" : "Inactif"}<br>
+                    WebRTC : ${o.media_online ? "En ligne" : "Hors ligne"}
                 </div>
             `;
         }
 
         list += `
-            <div class="object" onclick="selectedObjectId='${o.id}'; selectedPeerId='${peerId}';">
+            <div class="object" onclick="selectedObjectId='${o.id}';">
                 <b>${o.id}</b><br>
                 Source : ${o.source}<br>
                 Statut : <span style="color:${c}">${o.status}</span><br>
@@ -493,10 +365,10 @@ async function loadObjects(){
                 Vitesse : ${o.speed} km/h<br>
                 Altitude : ${o.altitude} m<br>
                 Média : ${o.media_active ? "✅ actif" : "❌ inactif"}<br>
-                Peer : ${peerId || "Aucun"}<br>
+                WebRTC : ${o.media_online ? "✅ en ligne" : "❌ hors ligne"}<br>
                 Dernière MAJ : ${o.age_seconds || 0}s<br>
                 ${o.alert}<br><br>
-                <button class="btn" onclick="event.stopPropagation(); connectStream('${o.id}', '${peerId}')">
+                <button class="btn" onclick="event.stopPropagation(); connectStream('${o.id}')">
                     🎥 Voir audio/vidéo
                 </button>
             </div>
@@ -529,11 +401,8 @@ async function refresh(){
 
     try{
         await loadObjects();
-
     }catch(e){
         failedRequests++;
-
-        console.warn("Erreur réseau SkyGuard :", e.message);
 
         const level = document.getElementById("level");
         level.innerText = "CONNEXION INSTABLE";
@@ -550,7 +419,6 @@ async function refresh(){
                     Le système réessaie automatiquement.
                 </div>`;
         }
-
     }finally{
         isRefreshing = false;
     }
