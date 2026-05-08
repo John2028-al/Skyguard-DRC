@@ -234,6 +234,7 @@ button:disabled{
         <div id="mediaStatus">Caméra/Micro : non activés</div>
 
         <button onclick="startMedia()">🎥 Activer caméra + micro</button>
+        <button onclick="switchCamera()">🔄 Changer caméra</button>
         <button class="stop" onclick="stopMedia()">■ Désactiver caméra + micro</button>
     </div>
 </div>
@@ -246,6 +247,7 @@ let sendCounter = 0;
 let isTracking = false;
 
 let mediaStream = null;
+let currentFacingMode = "environment";
 let pc = null;
 let currentDashboardSid = null;
 
@@ -508,28 +510,15 @@ function stopTracking(){
 }
 
 async function startMedia(){
-    if(mediaStream){
-        document.getElementById("mediaStatus").innerHTML =
-            `<span class="good">✅ Média déjà actif</span>`;
-        return;
-    }
-
-    if(!window.isSecureContext){
-        document.getElementById("mediaStatus").innerHTML =
-            `<span class="bad">Erreur : ouvrez en HTTPS pour caméra/micro.</span>`;
-        return;
-    }
-
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-        document.getElementById("mediaStatus").innerHTML =
-            `<span class="bad">Caméra/Micro non supportés par ce navigateur.</span>`;
-        return;
-    }
-
     try{
+
+        if(mediaStream){
+            mediaStream.getTracks().forEach(track=>track.stop());
+        }
+
         mediaStream = await navigator.mediaDevices.getUserMedia({
             video:{
-                facingMode:"environment",
+                facingMode: currentFacingMode,
                 width:{ideal:1280},
                 height:{ideal:720}
             },
@@ -537,6 +526,7 @@ async function startMedia(){
         });
 
         const video = document.getElementById("videoPreview");
+
         video.srcObject = mediaStream;
         video.style.display = "block";
 
@@ -545,12 +535,17 @@ async function startMedia(){
         socket.emit("register_tracker", {id:id});
 
         document.getElementById("mediaStatus").innerHTML =
-            `<span class="good">✅ Caméra/micro actifs</span><br>
-             WebRTC prêt pour : ${id}`;
+            `<span class="good">
+                ✅ Caméra active :
+                ${currentFacingMode === "environment" ? "Arrière" : "Selfie"}
+            </span>`;
 
     }catch(e){
+
         document.getElementById("mediaStatus").innerHTML =
-            `<span class="bad">❌ Autorisation refusée :</span><br>${e.message}`;
+            `<span class="bad">
+                ❌ Erreur caméra :
+            </span><br>${e.message}`;
     }
 }
 
@@ -571,6 +566,17 @@ function stopMedia(){
 
     document.getElementById("mediaStatus").innerHTML =
         "Caméra/Micro : désactivés";
+}
+
+async function switchCamera(){
+
+    if(currentFacingMode === "environment"){
+        currentFacingMode = "user";
+    }else{
+        currentFacingMode = "environment";
+    }
+
+    await startMedia();
 }
 </script>
 
