@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>SkyGuard Global</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+
+<style>
+*{box-sizing:border-box}
+body{
+    margin:0;
+    background:#020617;
+    color:#e0f2fe;
+    font-family:Consolas, monospace;
+}
+header{
+    height:72px;
+    background:linear-gradient(90deg,#020617,#0f172a,#111827);
+    border-bottom:1px solid #38bdf8;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 24px;
+}
+h1{
+    font-size:22px;
+    margin:0;
+    color:#67e8f9;
+}
+#level{
+    padding:10px 18px;
+    border-radius:30px;
+    background:#064e3b;
+    color:#a7f3d0;
+    font-weight:bold;
+}
+.layout{
+    height:calc(100vh - 72px);
+    display:grid;
+    grid-template-columns:340px 1fr 360px;
+}
+.panel{
+    background:#020617;
+    padding:16px;
+    border-right:1px solid #1e3a8a;
+    overflow:auto;
+}
+.panel.right{
+    border-right:none;
+    border-left:1px solid #1e3a8a;
+}
+.card{
+    background:linear-gradient(180deg,#0f172a,#020617);
+    border:1px solid #1e40af;
+    border-radius:18px;
+    padding:16px;
+    margin-bottom:14px;
+    box-shadow:0 0 25px rgba(14,165,233,.12);
+}
+.card h3{
+    margin:0 0 10px;
+    color:#67e8f9;
+    font-size:14px;
+}
+.big{
+    font-size:34px;
+    font-weight:bold;
+}
+.green{color:#22c55e}
+.yellow{color:#facc15}
+.red{color:#ef4444}
+#map{
+    height:100%;
+    width:100%;
+    background:#000;
+}
+.object{
+    background:#0f172a;
+    border:1px solid #334155;
+    padding:10px;
+    margin-bottom:8px;
+    border-radius:10px;
+    font-size:13px;
+}
+.alert{
+    background:#450a0a;
+    border-left:4px solid #ef4444;
+    padding:10px;
+    margin-bottom:10px;
+    border-radius:10px;
+}
+.btn{
+    display:block;
+    background:#0284c7;
+    color:white;
+    text-align:center;
+    padding:12px;
+    border-radius:10px;
+    text-decoration:none;
+    font-weight:bold;
+}
+.small{
+    font-size:12px;
+    color:#94a3b8;
+    line-height:1.5;
+}
+.radar{
+    position:absolute;
+    width:500px;
+    height:500px;
+    border-radius:50%;
+    border:1px solid rgba(34,211,238,.35);
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+    z-index:900;
+}
+.radar:after{
+    content:"";
+    position:absolute;
+    top:50%;
+    left:50%;
+    width:50%;
+    height:2px;
+    background:linear-gradient(90deg,#22d3ee,transparent);
+    transform-origin:left center;
+    animation:spin 3s linear infinite;
+}
+@keyframes spin{
+    from{transform:rotate(0deg)}
+    to{transform:rotate(360deg)}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🛡️ SKYGUARD GLOBAL — CIVIL COMMAND CENTER</h1>
+    <div id="level">INITIALISATION</div>
+</header>
+
+<div class="layout">
+
+<aside class="panel">
+    <div class="card">
+        <h3>TOTAL OBJETS</h3>
+        <div class="big" id="total">0</div>
+    </div>
+
+    <div class="card">
+        <h3>NORMAUX</h3>
+        <div class="big green" id="normal">0</div>
+    </div>
+
+    <div class="card">
+        <h3>SOUS OBSERVATION</h3>
+        <div class="big yellow" id="watch">0</div>
+    </div>
+
+    <div class="card">
+        <h3>DANGER</h3>
+        <div class="big red" id="danger">0</div>
+    </div>
+
+    <div class="card">
+        <h3>📱 TRACKER MONDIAL</h3>
+        <a href="/tracker" target="_blank" class="btn">Ouvrir le tracker GPS</a>
+        <p class="small">
+            À ouvrir sur téléphone via un lien HTTPS après déploiement en ligne.
+        </p>
+    </div>
+</aside>
+
+<main style="position:relative">
+    <div id="map"></div>
+    <div class="radar"></div>
+</main>
+
+<aside class="panel right">
+    <div class="card">
+        <h3>🚨 ALERTES TEMPS RÉEL</h3>
+        <div id="alerts">Aucune alerte</div>
+    </div>
+
+    <div class="card">
+        <h3>📡 OBJETS EN DIRECT</h3>
+        <div id="list">Aucun objet</div>
+    </div>
+
+    <div class="card">
+        <h3>MISSION</h3>
+        <p class="small">
+            Plateforme civile pour surveillance autorisée : GPS mobile,
+            ADS-B, simulation, zones sensibles, alertes et analyse temps réel.
+        </p>
+    </div>
+</aside>
+
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+const map = L.map('map').setView([0.4911,29.4731], 7);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'SkyGuard Global | OpenStreetMap'
+}).addTo(map);
+
+L.circle([0.4911,29.4731],{
+    radius:800,
+    color:'#ef4444',
+    fillColor:'#7f1d1d',
+    fillOpacity:.18
+}).addTo(map).bindPopup("Zone sensible protégée");
+
+let markers = {};
+let trails = {};
+
+function color(status){
+    if(status === "danger") return "#ef4444";
+    if(status === "watch") return "#facc15";
+    return "#22c55e";
+}
+
+function icon(obj){
+    let emoji = "🟢✈️";
+    if(obj.status === "danger") emoji = "🔴🚨";
+    else if(obj.status === "watch") emoji = "🟡🛰️";
+    else if(obj.source === "GPS MOBILE") emoji = "🟢📱";
+    else if(obj.source === "ADS-B") emoji = "🟢✈️";
+
+    return L.divIcon({
+        html:`<div style="font-size:24px">${emoji}</div>`,
+        className:"",
+        iconSize:[36,36]
+    });
+}
+
+async function loadObjects(){
+    const res = await fetch('/api/objects');
+    const data = await res.json();
+
+    let alerts = "";
+    let list = "";
+
+    data.objects.forEach(o=>{
+        const pos = [o.lat,o.lon];
+        const c = color(o.status);
+
+        if(!markers[o.id]){
+            markers[o.id] = L.marker(pos,{icon:icon(o)}).addTo(map);
+            trails[o.id] = L.polyline([pos],{
+                color:c,
+                weight:3,
+                opacity:.85
+            }).addTo(map);
+        }else{
+            markers[o.id].setLatLng(pos);
+            markers[o.id].setIcon(icon(o));
+            trails[o.id].addLatLng(pos);
+        }
+
+        markers[o.id].bindPopup(`
+            <b>${o.id}</b><br>
+            Type : ${o.type}<br>
+            Source : ${o.source}<br>
+            Vitesse : ${o.speed} km/h<br>
+            Altitude : ${o.altitude} m<br>
+            Statut : ${o.status}<br>
+            Alerte : ${o.alert}
+        `);
+
+        if(o.status === "danger"){
+            alerts += `<div class="alert">🚨 <b>${o.id}</b><br>${o.alert}<br>Source : ${o.source}</div>`;
+        }
+
+        list += `
+            <div class="object">
+                <b>${o.id}</b><br>
+                Source : ${o.source}<br>
+                Statut : <span style="color:${c}">${o.status}</span><br>
+                Vitesse : ${o.speed} km/h<br>
+                Altitude : ${o.altitude} m<br>
+                ${o.alert}
+            </div>
+        `;
+    });
+
+    document.getElementById("alerts").innerHTML = alerts || "Aucune alerte";
+    document.getElementById("list").innerHTML = list || "Aucun objet actif";
+}
+
+async function loadStats(){
+    const res = await fetch('/api/stats');
+    const s = await res.json();
+
+    document.getElementById("total").innerText = s.total;
+    document.getElementById("normal").innerText = s.normal;
+    document.getElementById("watch").innerText = s.watch;
+    document.getElementById("danger").innerText = s.danger;
+
+    const level = document.getElementById("level");
+    level.innerText = s.level;
+
+    if(s.danger > 0){
+        level.style.background = "#7f1d1d";
+        level.style.color = "#fecaca";
+    }else{
+        level.style.background = "#064e3b";
+        level.style.color = "#a7f3d0";
+    }
+}
+
+function refresh(){
+    loadObjects();
+    loadStats();
+}
+
+refresh();
+setInterval(refresh, 2500);
+</script>
+
+</body>
+</html>

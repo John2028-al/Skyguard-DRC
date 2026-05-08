@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>SkyGuard Tracker</title>
+
+<style>
+body{
+    margin:0;
+    background:#020617;
+    color:white;
+    font-family:Arial,sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+}
+.box{
+    width:92%;
+    max-width:450px;
+    background:#0f172a;
+    padding:25px;
+    border-radius:22px;
+    border:1px solid #38bdf8;
+    box-shadow:0 0 30px rgba(56,189,248,.2);
+}
+h2{color:#67e8f9}
+input,select,button{
+    width:100%;
+    padding:14px;
+    margin:8px 0;
+    border-radius:10px;
+    border:0;
+    font-size:16px;
+}
+button{
+    background:#0284c7;
+    color:white;
+    font-weight:bold;
+}
+.stop{
+    background:#991b1b;
+}
+.status{
+    background:#020617;
+    padding:12px;
+    border-radius:10px;
+    margin-top:12px;
+    font-size:14px;
+    line-height:1.5;
+}
+.warning{
+    color:#facc15;
+    font-size:13px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="box">
+    <h2>📱 SkyGuard Global Tracker</h2>
+
+    <p class="warning">
+        Ce suivi GPS nécessite l’autorisation du propriétaire du téléphone.
+    </p>
+
+    <input id="objectId" value="PHONE-01" placeholder="ID de l’objet">
+
+    <select id="type">
+        <option>Téléphone GPS autorisé</option>
+        <option>Véhicule officiel</option>
+        <option>Drone civil autorisé</option>
+        <option>Équipe terrain</option>
+    </select>
+
+    <button onclick="startTracking()">▶ Démarrer le suivi GPS</button>
+    <button class="stop" onclick="stopTracking()">■ Arrêter</button>
+
+    <div class="status" id="status">En attente...</div>
+</div>
+
+<script>
+let watchId = null;
+
+function startTracking(){
+    const id = document.getElementById("objectId").value || "PHONE-01";
+    const type = document.getElementById("type").value;
+
+    if(!navigator.geolocation){
+        document.getElementById("status").innerHTML = "GPS non supporté.";
+        return;
+    }
+
+    watchId = navigator.geolocation.watchPosition(async pos=>{
+        const payload = {
+            id:id,
+            type:type,
+            lat:pos.coords.latitude,
+            lon:pos.coords.longitude,
+            speed:pos.coords.speed || 0,
+            altitude:pos.coords.altitude || 0
+        };
+
+        await fetch("/api/update",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(payload)
+        });
+
+        document.getElementById("status").innerHTML = `
+            ✅ Position envoyée<br>
+            ID : ${id}<br>
+            Latitude : ${payload.lat}<br>
+            Longitude : ${payload.lon}<br>
+            Vitesse : ${(payload.speed * 3.6).toFixed(2)} km/h<br>
+            Altitude : ${payload.altitude || 0} m
+        `;
+    }, err=>{
+        document.getElementById("status").innerHTML = "Erreur GPS : " + err.message;
+    }, {
+        enableHighAccuracy:true,
+        maximumAge:1000,
+        timeout:10000
+    });
+}
+
+function stopTracking(){
+    if(watchId !== null){
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+
+    document.getElementById("status").innerHTML = "Suivi arrêté.";
+}
+</script>
+
+</body>
+</html>
