@@ -1,16 +1,11 @@
-import eventlet
-eventlet.monkey_patch()
+from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
+import time
+import math
+from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
 
-from flask import Flask, render_template, jsonify, request
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit
-import time
-import math
-from flask import Flask, render_template, jsonify, request
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit
-import time
-import math
 
 app = Flask(__name__)
 CORS(app)
@@ -18,7 +13,7 @@ CORS(app)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="eventlet",
+    async_mode="gevent",
     ping_timeout=60,
     ping_interval=25
 )
