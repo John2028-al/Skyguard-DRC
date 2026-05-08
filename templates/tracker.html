@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SkyGuard Tracker</title>
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
 <style>
 *{box-sizing:border-box}
 
@@ -156,11 +158,11 @@ button:disabled{
 <div class="box">
     <div class="logo">📡</div>
     <h2>SkyGuard Global Tracker</h2>
-    <div class="subtitle">Suivi GPS autorisé en temps réel</div>
+    <div class="subtitle">Suivi GPS + audio/vidéo autorisés</div>
 
     <p class="warning">
-        Ce système envoie la position GPS de cet appareil au centre de commandement.
-        Utiliser uniquement avec autorisation.
+        Ce système envoie la position GPS, la caméra et le micro de cet appareil
+        au centre de commandement. Utiliser uniquement avec autorisation.
     </p>
 
     <input id="objectId" value="PHONE-01" placeholder="ID de l’objet ex: DRONE-01">
@@ -177,7 +179,7 @@ button:disabled{
     <button id="stopBtn" class="stop" onclick="stopTracking()" disabled>■ Arrêter le suivi</button>
 
     <div class="status" id="mainStatus">
-        <span class="pulse" id="pulse"></span>
+        <span class="pulse"></span>
         <span class="wait">En attente du démarrage...</span>
     </div>
 
@@ -218,22 +220,22 @@ button:disabled{
     </div>
 
     <div class="status">
-    <h3 style="color:#67e8f9;margin-top:0;">🎥 Audio / Vidéo autorisés</h3>
+        <h3 style="color:#67e8f9;margin-top:0;">🎥 Audio / Vidéo autorisés</h3>
 
-    <video id="videoPreview" autoplay playsinline muted style="
-        width:100%;
-        border-radius:14px;
-        background:#000;
-        border:1px solid #334155;
-        display:none;
-        margin-bottom:10px;
-    "></video>
+        <video id="videoPreview" autoplay playsinline muted style="
+            width:100%;
+            border-radius:14px;
+            background:#000;
+            border:1px solid #334155;
+            display:none;
+            margin-bottom:10px;
+        "></video>
 
-    <div id="mediaStatus">Caméra/Micro : non activés</div>
+        <div id="mediaStatus">Caméra/Micro : non activés</div>
 
-    <button onclick="startMedia()">🎥 Activer caméra + micro</button>
-    <button class="stop" onclick="stopMedia()">■ Désactiver caméra + micro</button>
-</div>
+        <button onclick="startMedia()">🎥 Activer caméra + micro</button>
+        <button class="stop" onclick="stopMedia()">■ Désactiver caméra + micro</button>
+    </div>
 </div>
 
 <script>
@@ -243,15 +245,18 @@ let lastPosition = null;
 let sendCounter = 0;
 let isTracking = false;
 
+let mediaStream = null;
+let peer = null;
+
 function setMainStatus(message, type="wait"){
     document.getElementById("mainStatus").innerHTML =
-        `<span class="pulse ${type === 'good' ? 'active' : ''}" id="pulse"></span>
+        `<span class="pulse ${type === 'good' ? 'active' : ''}"></span>
          <span class="${type}">${message}</span>`;
 }
 
 function updateDisplay(payload, accuracy){
-    document.getElementById("lat").innerText = payload.lat.toFixed(6);
-    document.getElementById("lon").innerText = payload.lon.toFixed(6);
+    document.getElementById("lat").innerText = payload.lat.toFixed(7);
+    document.getElementById("lon").innerText = payload.lon.toFixed(7);
     document.getElementById("speed").innerText = (payload.speed * 3.6).toFixed(2) + " km/h";
     document.getElementById("altitude").innerText = (payload.altitude || 0).toFixed(1) + " m";
     document.getElementById("accuracy").innerText = accuracy ? accuracy.toFixed(1) + " m" : "---";
@@ -271,6 +276,8 @@ async function sendToServer(){
         speed: lastPosition.coords.speed || 0,
         altitude: lastPosition.coords.altitude || 0,
         accuracy: lastPosition.coords.accuracy || 0,
+        media_peer_id: "tracker-" + id,
+        media_active: mediaStream ? true : false,
         timestamp_mobile: new Date().toISOString()
     };
 
@@ -387,15 +394,19 @@ function stopTracking(){
     document.getElementById("startBtn").disabled = false;
     document.getElementById("stopBtn").disabled = true;
 
-    setMainStatus("Suivi arrêté.", "wait");
+    setMainStatus("Suivi GPS arrêté.", "wait");
 
     document.getElementById("serverStatus").innerHTML =
         "Serveur : suivi arrêté";
 }
 
-let mediaStream = null;
-
 async function startMedia(){
+    if(mediaStream){
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="good">✅ Flux déjà actif</span>`;
+        return;
+    }
+
     if(!window.isSecureContext){
         document.getElementById("mediaStatus").innerHTML =
             `<span class="bad">Erreur : ouvrez en HTTPS pour caméra/micro.</span>`;
@@ -410,12 +421,12 @@ async function startMedia(){
 
     try{
         mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: "environment",
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+            video:{
+                facingMode:"environment",
+                width:{ideal:1280},
+                height:{ideal:720}
             },
-            audio: true
+            audio:true
         });
 
         const video = document.getElementById("videoPreview");
@@ -423,19 +434,56 @@ async function startMedia(){
         video.style.display = "block";
 
         document.getElementById("mediaStatus").innerHTML =
-            `<span class="good">✅ Caméra et micro autorisés</span><br>
-             Flux local actif sur ce téléphone.`;
+            `<span class="good">✅ Caméra et micro actifs</span>`;
+
+        startMediaBroadcast();
 
     }catch(e){
         document.getElementById("mediaStatus").innerHTML =
-            `<span class="bad">❌ Autorisation refusée ou périphérique indisponible :</span><br>${e.message}`;
+            `<span class="bad">❌ Autorisation refusée :</span><br>${e.message}`;
     }
+}
+
+function startMediaBroadcast(){
+    if(!mediaStream){
+        return;
+    }
+
+    const id = document.getElementById("objectId").value || "PHONE-01";
+    const peerId = "tracker-" + id;
+
+    if(peer){
+        peer.destroy();
+        peer = null;
+    }
+
+    peer = new Peer(peerId);
+
+    peer.on("open", ()=>{
+        document.getElementById("mediaStatus").innerHTML +=
+            `<br><span class="good">📡 Diffusion temps réel active</span><br>
+             ID flux : ${peerId}`;
+    });
+
+    peer.on("call", call=>{
+        call.answer(mediaStream);
+    });
+
+    peer.on("error", err=>{
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="bad">❌ Erreur PeerJS :</span><br>${err.message}`;
+    });
 }
 
 function stopMedia(){
     if(mediaStream){
-        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream.getTracks().forEach(track=>track.stop());
         mediaStream = null;
+    }
+
+    if(peer){
+        peer.destroy();
+        peer = null;
     }
 
     const video = document.getElementById("videoPreview");

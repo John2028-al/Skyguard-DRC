@@ -6,6 +6,7 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 *{box-sizing:border-box}
 body{
@@ -191,6 +192,20 @@ h1{
     </div>
 
     <div class="card">
+    <h3>🎥 VISIBILITÉ / AUDIO EN DIRECT</h3>
+    <video id="liveVideo" autoplay playsinline controls style="
+        width:100%;
+        background:#000;
+        border-radius:12px;
+        border:1px solid #334155;
+        margin-bottom:10px;
+    "></video>
+
+    <div id="streamStatus" class="small">Aucun flux connecté</div>
+    <button class="btn" onclick="connectSelectedStream()">Connecter au flux autorisé</button>
+</div>
+
+    <div class="card">
         <h3>MISSION</h3>
         <p class="small">
             Plateforme civile pour surveillance autorisée : GPS mobile,
@@ -219,6 +234,15 @@ L.circle([0.4911,29.4731],{
 
 let markers = {};
 let trails = {};
+let trailPoints = {};
+let selectedObjectId = null;
+
+const dashboardPeer = new Peer("dashboard-skyguard-drc");
+
+dashboardPeer.on("open", id=>{
+    document.getElementById("streamStatus").innerHTML =
+        "Centre vidéo prêt : " + id;
+});
 
 function color(status){
     if(status === "danger") return "#ef4444";
@@ -240,20 +264,64 @@ function icon(obj){
     });
 }
 
+function connectStream(objectId){
+    selectedObjectId = objectId;
+    connectSelectedStream();
+}
+
+function connectSelectedStream(){
+    if(!selectedObjectId){
+        document.getElementById("streamStatus").innerHTML =
+            "Sélectionnez d’abord un engin dans la liste.";
+        return;
+    }
+
+    const remotePeerId = "tracker-" + selectedObjectId;
+
+    document.getElementById("streamStatus").innerHTML =
+        "Connexion au flux : " + remotePeerId;
+
+    navigator.mediaDevices.getUserMedia({video:false, audio:false})
+    .catch(()=>null)
+    .finally(()=>{
+        const call = dashboardPeer.call(remotePeerId, new MediaStream());
+
+        call.on("stream", remoteStream=>{
+            const video = document.getElementById("liveVideo");
+            video.srcObject = remoteStream;
+            document.getElementById("streamStatus").innerHTML =
+                "✅ Flux audio/vidéo connecté : " + selectedObjectId;
+        });
+
+        call.on("error", err=>{
+            document.getElementById("streamStatus").innerHTML =
+                "❌ Erreur flux : " + err.message;
+        });
+    });
+}
+
 async function loadObjects(){
     const res = await fetch('/api/objects');
     const data = await res.json();
 
     let alerts = "";
     let list = "";
+    let activeIds = [];
 
     data.objects.forEach(o=>{
+        activeIds.push(o.id);
+
         const pos = [o.lat,o.lon];
         const c = color(o.status);
 
+        const latitudeExacte = Number(o.lat).toFixed(7);
+        const longitudeExacte = Number(o.lon).toFixed(7);
+
         if(!markers[o.id]){
             markers[o.id] = L.marker(pos,{icon:icon(o)}).addTo(map);
-            trails[o.id] = L.polyline([pos],{
+            trailPoints[o.id] = [pos];
+
+            trails[o.id] = L.polyline(trailPoints[o.id],{
                 color:c,
                 weight:3,
                 opacity:.85
@@ -261,13 +329,24 @@ async function loadObjects(){
         }else{
             markers[o.id].setLatLng(pos);
             markers[o.id].setIcon(icon(o));
-            trails[o.id].addLatLng(pos);
+
+            trailPoints[o.id].push(pos);
+
+            // Réinitialisation légère : garder seulement les 80 dernières positions
+            if(trailPoints[o.id].length > 80){
+                trailPoints[o.id].shift();
+            }
+
+            trails[o.id].setLatLngs(trailPoints[o.id]);
+            trails[o.id].setStyle({color:c});
         }
 
         markers[o.id].bindPopup(`
             <b>${o.id}</b><br>
             Type : ${o.type}<br>
             Source : ${o.source}<br>
+            Latitude exacte : ${latitudeExacte}<br>
+            Longitude exacte : ${longitudeExacte}<br>
             Vitesse : ${o.speed} km/h<br>
             Altitude : ${o.altitude} m<br>
             Statut : ${o.status}<br>
@@ -275,19 +354,43 @@ async function loadObjects(){
         `);
 
         if(o.status === "danger"){
-            alerts += `<div class="alert">🚨 <b>${o.id}</b><br>${o.alert}<br>Source : ${o.source}</div>`;
+            alerts += `
+                <div class="alert">
+                    🚨 <b>${o.id}</b><br>
+                    ${o.alert}<br>
+                    Source : ${o.source}<br>
+                    Lat : ${latitudeExacte}<br>
+                    Lon : ${longitudeExacte}
+                </div>
+            `;
         }
 
         list += `
-            <div class="object">
+            <div class="object" onclick="selectedObjectId='${o.id}'">
                 <b>${o.id}</b><br>
                 Source : ${o.source}<br>
                 Statut : <span style="color:${c}">${o.status}</span><br>
+                Latitude : ${latitudeExacte}<br>
+                Longitude : ${longitudeExacte}<br>
                 Vitesse : ${o.speed} km/h<br>
                 Altitude : ${o.altitude} m<br>
-                ${o.alert}
+                ${o.alert}<br><br>
+                <button class="btn" onclick="connectStream('${o.id}')">
+                    🎥 Voir audio/vidéo
+                </button>
             </div>
         `;
+    });
+
+    // Supprimer automatiquement les objets disparus
+    Object.keys(markers).forEach(id=>{
+        if(!activeIds.includes(id)){
+            map.removeLayer(markers[id]);
+            map.removeLayer(trails[id]);
+            delete markers[id];
+            delete trails[id];
+            delete trailPoints[id];
+        }
     });
 
     document.getElementById("alerts").innerHTML = alerts || "Aucune alerte";
@@ -320,8 +423,9 @@ function refresh(){
     loadStats();
 }
 
+// Réinitialisation / actualisation automatique chaque seconde
 refresh();
-setInterval(refresh, 2500);
+setInterval(refresh, 1000);
 </script>
 
 </body>
