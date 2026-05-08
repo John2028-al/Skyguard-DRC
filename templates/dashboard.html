@@ -239,10 +239,33 @@ let selectedObjectId = null;
 
 const dashboardPeer = new Peer("dashboard-skyguard-drc");
 
-dashboardPeer.on("open", id=>{
-    document.getElementById("streamStatus").innerHTML =
-        "Centre vidéo prêt : " + id;
-});
+let dashboardPeer = null;
+let dashboardPeerReady = false;
+
+function initDashboardPeer(){
+    dashboardPeer = new Peer("dashboard-skyguard-drc-" + Math.floor(Math.random() * 100000));
+
+    dashboardPeer.on("open", id=>{
+        dashboardPeerReady = true;
+        document.getElementById("streamStatus").innerHTML =
+            "✅ Centre vidéo prêt : " + id;
+    });
+
+    dashboardPeer.on("error", err=>{
+        dashboardPeerReady = false;
+        document.getElementById("streamStatus").innerHTML =
+            "❌ Erreur centre vidéo : " + err.message;
+    });
+
+    dashboardPeer.on("disconnected", ()=>{
+        dashboardPeerReady = false;
+        document.getElementById("streamStatus").innerHTML =
+            "⚠️ Centre vidéo déconnecté. Reconnexion...";
+        dashboardPeer.reconnect();
+    });
+}
+
+initDashboardPeer();
 
 dashboardPeer.on("error", err=>{
     document.getElementById("streamStatus").innerHTML =
@@ -281,6 +304,12 @@ async function connectSelectedStream(){
         return;
     }
 
+    if(!dashboardPeer || !dashboardPeerReady){
+        document.getElementById("streamStatus").innerHTML =
+            "Centre vidéo pas encore prêt. Attendez 2 secondes puis réessayez.";
+        return;
+    }
+
     const remotePeerId = "tracker-" + selectedObjectId;
 
     document.getElementById("streamStatus").innerHTML =
@@ -290,6 +319,12 @@ async function connectSelectedStream(){
         const emptyStream = new MediaStream();
 
         const call = dashboardPeer.call(remotePeerId, emptyStream);
+
+        if(!call){
+            document.getElementById("streamStatus").innerHTML =
+                "❌ Appel impossible. Vérifiez que le téléphone affiche : Diffusion temps réel active.";
+            return;
+        }
 
         call.on("stream", remoteStream=>{
             const video = document.getElementById("liveVideo");
@@ -312,11 +347,16 @@ async function connectSelectedStream(){
                 "❌ Erreur flux : " + err.message;
         });
 
+        call.on("close", ()=>{
+            document.getElementById("streamStatus").innerHTML =
+                "⚠️ Flux fermé.";
+        });
+
         setTimeout(()=>{
             const video = document.getElementById("liveVideo");
             if(!video.srcObject){
                 document.getElementById("streamStatus").innerHTML =
-                    "⚠️ Aucun flux reçu. Vérifiez que caméra/micro sont activés sur le téléphone.";
+                    "⚠️ Aucun flux reçu. Activez caméra/micro sur le téléphone puis réessayez.";
             }
         }, 7000);
 
