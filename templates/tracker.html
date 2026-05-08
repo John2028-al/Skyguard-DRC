@@ -216,6 +216,24 @@ button:disabled{
     <div class="status" id="serverStatus">
         Serveur : non connecté
     </div>
+
+    <div class="status">
+    <h3 style="color:#67e8f9;margin-top:0;">🎥 Audio / Vidéo autorisés</h3>
+
+    <video id="videoPreview" autoplay playsinline muted style="
+        width:100%;
+        border-radius:14px;
+        background:#000;
+        border:1px solid #334155;
+        display:none;
+        margin-bottom:10px;
+    "></video>
+
+    <div id="mediaStatus">Caméra/Micro : non activés</div>
+
+    <button onclick="startMedia()">🎥 Activer caméra + micro</button>
+    <button class="stop" onclick="stopMedia()">■ Désactiver caméra + micro</button>
+</div>
 </div>
 
 <script>
@@ -373,6 +391,59 @@ function stopTracking(){
 
     document.getElementById("serverStatus").innerHTML =
         "Serveur : suivi arrêté";
+}
+
+let mediaStream = null;
+
+async function startMedia(){
+    if(!window.isSecureContext){
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="bad">Erreur : ouvrez en HTTPS pour caméra/micro.</span>`;
+        return;
+    }
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="bad">Caméra/Micro non supportés par ce navigateur.</span>`;
+        return;
+    }
+
+    try{
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "environment",
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            },
+            audio: true
+        });
+
+        const video = document.getElementById("videoPreview");
+        video.srcObject = mediaStream;
+        video.style.display = "block";
+
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="good">✅ Caméra et micro autorisés</span><br>
+             Flux local actif sur ce téléphone.`;
+
+    }catch(e){
+        document.getElementById("mediaStatus").innerHTML =
+            `<span class="bad">❌ Autorisation refusée ou périphérique indisponible :</span><br>${e.message}`;
+    }
+}
+
+function stopMedia(){
+    if(mediaStream){
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+    }
+
+    const video = document.getElementById("videoPreview");
+    video.srcObject = null;
+    video.style.display = "none";
+
+    document.getElementById("mediaStatus").innerHTML =
+        "Caméra/Micro : désactivés";
 }
 </script>
 
