@@ -2,56 +2,151 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SkyGuard Tracker</title>
 
 <style>
+*{box-sizing:border-box}
+
 body{
     margin:0;
-    background:#020617;
+    background:radial-gradient(circle at top,#0f766e22,#020617 45%);
     color:white;
     font-family:Arial,sans-serif;
-    display:flex;
-    align-items:center;
-    justify-content:center;
     min-height:100vh;
+    padding:18px;
 }
+
 .box{
-    width:92%;
-    max-width:450px;
-    background:#0f172a;
-    padding:25px;
-    border-radius:22px;
+    width:100%;
+    max-width:480px;
+    margin:auto;
+    background:linear-gradient(180deg,#0f172a,#020617);
+    padding:22px;
+    border-radius:24px;
     border:1px solid #38bdf8;
-    box-shadow:0 0 30px rgba(56,189,248,.2);
+    box-shadow:0 0 35px rgba(56,189,248,.22);
 }
-h2{color:#67e8f9}
+
+.logo{
+    text-align:center;
+    font-size:46px;
+    margin-bottom:8px;
+}
+
+h2{
+    color:#67e8f9;
+    text-align:center;
+    margin:5px 0 6px;
+}
+
+.subtitle{
+    text-align:center;
+    color:#94a3b8;
+    font-size:13px;
+    margin-bottom:18px;
+}
+
+.warning{
+    color:#facc15;
+    background:#422006;
+    border:1px solid #854d0e;
+    padding:10px;
+    border-radius:12px;
+    font-size:13px;
+    line-height:1.4;
+}
+
 input,select,button{
     width:100%;
     padding:14px;
     margin:8px 0;
-    border-radius:10px;
+    border-radius:12px;
     border:0;
     font-size:16px;
 }
+
+input,select{
+    background:#020617;
+    color:white;
+    border:1px solid #334155;
+}
+
 button{
     background:#0284c7;
     color:white;
     font-weight:bold;
 }
+
+button:disabled{
+    opacity:.55;
+}
+
 .stop{
     background:#991b1b;
 }
+
+.grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:12px;
+}
+
+.card{
+    background:#020617;
+    border:1px solid #1e3a8a;
+    padding:12px;
+    border-radius:14px;
+    min-height:78px;
+}
+
+.label{
+    color:#94a3b8;
+    font-size:12px;
+}
+
+.value{
+    font-size:18px;
+    font-weight:bold;
+    color:#e0f2fe;
+    margin-top:6px;
+    word-break:break-word;
+}
+
 .status{
     background:#020617;
-    padding:12px;
-    border-radius:10px;
+    border:1px solid #334155;
+    padding:13px;
+    border-radius:14px;
     margin-top:12px;
     font-size:14px;
     line-height:1.5;
 }
-.warning{
-    color:#facc15;
-    font-size:13px;
+
+.good{color:#22c55e}
+.bad{color:#ef4444}
+.wait{color:#facc15}
+
+.pulse{
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    background:#ef4444;
+    display:inline-block;
+    margin-right:7px;
+}
+
+.pulse.active{
+    background:#22c55e;
+    box-shadow:0 0 18px #22c55e;
+    animation:pulse 1s infinite;
+}
+
+@keyframes pulse{
+    0%{transform:scale(1)}
+    50%{transform:scale(1.3)}
+    100%{transform:scale(1)}
 }
 </style>
 </head>
@@ -59,79 +154,225 @@ button{
 <body>
 
 <div class="box">
-    <h2>📱 SkyGuard Global Tracker</h2>
+    <div class="logo">📡</div>
+    <h2>SkyGuard Global Tracker</h2>
+    <div class="subtitle">Suivi GPS autorisé en temps réel</div>
 
     <p class="warning">
-        Ce suivi GPS nécessite l’autorisation du propriétaire du téléphone.
+        Ce système envoie la position GPS de cet appareil au centre de commandement.
+        Utiliser uniquement avec autorisation.
     </p>
 
-    <input id="objectId" value="PHONE-01" placeholder="ID de l’objet">
+    <input id="objectId" value="PHONE-01" placeholder="ID de l’objet ex: DRONE-01">
 
     <select id="type">
         <option>Téléphone GPS autorisé</option>
         <option>Véhicule officiel</option>
         <option>Drone civil autorisé</option>
         <option>Équipe terrain</option>
+        <option>Engin autorisé</option>
     </select>
 
-    <button onclick="startTracking()">▶ Démarrer le suivi GPS</button>
-    <button class="stop" onclick="stopTracking()">■ Arrêter</button>
+    <button id="startBtn" onclick="startTracking()">▶ Démarrer le suivi GPS</button>
+    <button id="stopBtn" class="stop" onclick="stopTracking()" disabled>■ Arrêter le suivi</button>
 
-    <div class="status" id="status">En attente...</div>
+    <div class="status" id="mainStatus">
+        <span class="pulse" id="pulse"></span>
+        <span class="wait">En attente du démarrage...</span>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <div class="label">Latitude</div>
+            <div class="value" id="lat">---</div>
+        </div>
+
+        <div class="card">
+            <div class="label">Longitude</div>
+            <div class="value" id="lon">---</div>
+        </div>
+
+        <div class="card">
+            <div class="label">Vitesse</div>
+            <div class="value" id="speed">0 km/h</div>
+        </div>
+
+        <div class="card">
+            <div class="label">Précision GPS</div>
+            <div class="value" id="accuracy">---</div>
+        </div>
+
+        <div class="card">
+            <div class="label">Altitude</div>
+            <div class="value" id="altitude">---</div>
+        </div>
+
+        <div class="card">
+            <div class="label">Envois serveur</div>
+            <div class="value" id="sendCount">0</div>
+        </div>
+    </div>
+
+    <div class="status" id="serverStatus">
+        Serveur : non connecté
+    </div>
 </div>
 
 <script>
 let watchId = null;
+let sendInterval = null;
+let lastPosition = null;
+let sendCounter = 0;
+let isTracking = false;
 
-function startTracking(){
+function setMainStatus(message, type="wait"){
+    document.getElementById("mainStatus").innerHTML =
+        `<span class="pulse ${type === 'good' ? 'active' : ''}" id="pulse"></span>
+         <span class="${type}">${message}</span>`;
+}
+
+function updateDisplay(payload, accuracy){
+    document.getElementById("lat").innerText = payload.lat.toFixed(6);
+    document.getElementById("lon").innerText = payload.lon.toFixed(6);
+    document.getElementById("speed").innerText = (payload.speed * 3.6).toFixed(2) + " km/h";
+    document.getElementById("altitude").innerText = (payload.altitude || 0).toFixed(1) + " m";
+    document.getElementById("accuracy").innerText = accuracy ? accuracy.toFixed(1) + " m" : "---";
+}
+
+async function sendToServer(){
+    if(!lastPosition || !isTracking) return;
+
     const id = document.getElementById("objectId").value || "PHONE-01";
     const type = document.getElementById("type").value;
 
-    if(!navigator.geolocation){
-        document.getElementById("status").innerHTML = "GPS non supporté.";
-        return;
-    }
+    const payload = {
+        id: id,
+        type: type,
+        lat: lastPosition.coords.latitude,
+        lon: lastPosition.coords.longitude,
+        speed: lastPosition.coords.speed || 0,
+        altitude: lastPosition.coords.altitude || 0,
+        accuracy: lastPosition.coords.accuracy || 0,
+        timestamp_mobile: new Date().toISOString()
+    };
 
-    watchId = navigator.geolocation.watchPosition(async pos=>{
-        const payload = {
-            id:id,
-            type:type,
-            lat:pos.coords.latitude,
-            lon:pos.coords.longitude,
-            speed:pos.coords.speed || 0,
-            altitude:pos.coords.altitude || 0
-        };
+    updateDisplay(payload, lastPosition.coords.accuracy);
 
-        await fetch("/api/update",{
+    try{
+        const res = await fetch("/api/update",{
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify(payload)
         });
 
-        document.getElementById("status").innerHTML = `
-            ✅ Position envoyée<br>
-            ID : ${id}<br>
-            Latitude : ${payload.lat}<br>
-            Longitude : ${payload.lon}<br>
-            Vitesse : ${(payload.speed * 3.6).toFixed(2)} km/h<br>
-            Altitude : ${payload.altitude || 0} m
-        `;
+        if(!res.ok){
+            throw new Error("Réponse serveur invalide");
+        }
+
+        sendCounter++;
+        document.getElementById("sendCount").innerText = sendCounter;
+
+        document.getElementById("serverStatus").innerHTML =
+            `<span class="good">✅ Serveur connecté</span><br>
+             Dernier envoi : ${new Date().toLocaleTimeString()}`;
+
+        setMainStatus("Suivi GPS actif — position envoyée chaque seconde", "good");
+
+    }catch(e){
+        document.getElementById("serverStatus").innerHTML =
+            `<span class="bad">❌ Erreur serveur :</span> ${e.message}`;
+
+        setMainStatus("GPS actif, mais envoi serveur échoué", "bad");
+    }
+}
+
+async function checkPermission(){
+    if(!navigator.permissions) return "unknown";
+
+    try{
+        const result = await navigator.permissions.query({name:"geolocation"});
+        return result.state;
+    }catch(e){
+        return "unknown";
+    }
+}
+
+async function startTracking(){
+    if(!window.isSecureContext){
+        setMainStatus("Erreur : ouvrez cette page en HTTPS pour utiliser le GPS.", "bad");
+        return;
+    }
+
+    if(!navigator.geolocation){
+        setMainStatus("GPS non supporté par ce téléphone.", "bad");
+        return;
+    }
+
+    const permission = await checkPermission();
+
+    if(permission === "denied"){
+        setMainStatus("Localisation refusée. Autorisez la position dans les paramètres du navigateur.", "bad");
+        return;
+    }
+
+    document.getElementById("startBtn").disabled = true;
+    document.getElementById("stopBtn").disabled = false;
+
+    isTracking = true;
+    sendCounter = 0;
+    document.getElementById("sendCount").innerText = "0";
+
+    setMainStatus("Recherche GPS haute précision...", "wait");
+
+    watchId = navigator.geolocation.watchPosition(pos=>{
+        lastPosition = pos;
+
+        const tempPayload = {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            speed: pos.coords.speed || 0,
+            altitude: pos.coords.altitude || 0
+        };
+
+        updateDisplay(tempPayload, pos.coords.accuracy);
+
     }, err=>{
-        document.getElementById("status").innerHTML = "Erreur GPS : " + err.message;
+        let msg = "Erreur GPS : " + err.message;
+
+        if(err.code === 1) msg = "Permission GPS refusée.";
+        if(err.code === 2) msg = "Position indisponible. Activez GPS et données mobiles.";
+        if(err.code === 3) msg = "Temps d’attente dépassé. Sortez à ciel ouvert.";
+
+        setMainStatus(msg, "bad");
     }, {
         enableHighAccuracy:true,
-        maximumAge:1000,
-        timeout:10000
+        maximumAge:0,
+        timeout:15000
     });
+
+    sendInterval = setInterval(sendToServer, 1000);
 }
 
 function stopTracking(){
+    isTracking = false;
+
     if(watchId !== null){
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
     }
 
-    document.getElementById("status").innerHTML = "Suivi arrêté.";
+    if(sendInterval !== null){
+        clearInterval(sendInterval);
+        sendInterval = null;
+    }
+
+    document.getElementById("startBtn").disabled = false;
+    document.getElementById("stopBtn").disabled = true;
+
+    setMainStatus("Suivi arrêté.", "wait");
+
+    document.getElementById("serverStatus").innerHTML =
+        "Serveur : suivi arrêté";
 }
 </script>
 
