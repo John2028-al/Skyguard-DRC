@@ -59,6 +59,13 @@ h1{font-size:22px;margin:0;color:#67e8f9}
         <h3>🌐 ÉTAT SERVEUR</h3>
         <div id="networkStatus" class="status-line">Connexion en cours...</div>
     </div>
+
+    <div class="card">
+    <h3>🔊 ALARME</h3>
+    <button class="btn" onclick="enableAlarm()">Activer l’alarme</button>
+    <button class="btn" style="background:#991b1b;margin-top:8px;" onclick="stopAlarm()">Arrêter l’alarme</button>
+    <div id="alarmStatus" class="status-line">Alarme non activée</div>
+</div>
 </aside>
 
 <main style="position:relative">
@@ -119,6 +126,8 @@ let currentTrackerSid = null;
 
 let isRefreshing = false;
 let failedRequests = 0;
+let alarmEnabled = false;
+let alarmPlaying = false;
 
 socket.on("connect", ()=>{
     socket.emit("register_dashboard");
@@ -284,12 +293,14 @@ async function loadObjects(){
     level.innerText = data.level;
 
     if(data.danger > 0){
-        level.style.background = "#7f1d1d";
-        level.style.color = "#fecaca";
-    }else{
-        level.style.background = "#064e3b";
-        level.style.color = "#a7f3d0";
-    }
+    level.style.background = "#7f1d1d";
+    level.style.color = "#fecaca";
+    playAlarm();
+}else{
+    level.style.background = "#064e3b";
+    level.style.color = "#a7f3d0";
+    stopAlarm();
+}
 
     let alerts = "";
     let list = "";
@@ -394,6 +405,53 @@ async function loadObjects(){
     failedRequests = 0;
 }
 
+
+function enableAlarm(){
+    alarmEnabled = true;
+
+    const alarm = document.getElementById("alarmSound");
+
+    alarm.play().then(()=>{
+        alarm.pause();
+        alarm.currentTime = 0;
+
+        document.getElementById("alarmStatus").innerHTML =
+            "✅ Alarme autorisée par le navigateur";
+    }).catch(()=>{
+        document.getElementById("alarmStatus").innerHTML =
+            "⚠️ Cliquez encore une fois pour autoriser le son";
+    });
+}
+
+function playAlarm(){
+    if(!alarmEnabled || alarmPlaying) return;
+
+    const alarm = document.getElementById("alarmSound");
+
+    alarm.play().then(()=>{
+        alarmPlaying = true;
+
+        document.getElementById("alarmStatus").innerHTML =
+            "🚨 Alarme en cours";
+    }).catch(()=>{
+        document.getElementById("alarmStatus").innerHTML =
+            "⚠️ Le navigateur bloque le son. Cliquez sur Activer l’alarme.";
+    });
+}
+
+function stopAlarm(){
+    const alarm = document.getElementById("alarmSound");
+
+    alarm.pause();
+    alarm.currentTime = 0;
+
+    alarmPlaying = false;
+
+    document.getElementById("alarmStatus").innerHTML =
+        "🔕 Alarme arrêtée";
+}
+
+
 async function refresh(){
     if(isRefreshing) return;
 
@@ -428,5 +486,9 @@ refresh();
 setInterval(refresh, 2500);
 </script>
 
+
+<audio id="alarmSound" loop>
+    <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
+</audio>
 </body>
 </html>
