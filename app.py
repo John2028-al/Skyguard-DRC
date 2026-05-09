@@ -1,13 +1,14 @@
-from flask import Flask, render_template, jsonify, request
+from functools import wraps
+from flask import Flask, render_template, jsonify, request, session, redirect
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import time
 import math
-from flask import Flask, render_template, jsonify, request
-from flask_cors import CORS
-
+import os
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "CHANGE_MOI_SECRET_SKYGUARD_2026")
+
 CORS(app)
 
 socketio = SocketIO(
@@ -18,6 +19,12 @@ socketio = SocketIO(
     ping_interval=25
 )
 
+USERS = {
+    "ADMIN2026": {"role": "admin", "name": "Administrateur"},
+    "TRACKER2026": {"role": "tracker", "name": "Engin autorisé"},
+    "VIEW2026": {"role": "viewer", "name": "Observateur"}
+}
+
 BASE_LAT = 0.4911
 BASE_LON = 29.4731
 
@@ -26,31 +33,77 @@ tracker_sockets = {}
 dashboard_sockets = set()
 
 
+def login_required(role=None):
+    def wrapper(fn):
+        @wraps(fn)
+        def decorated(*args, **kwargs):
+            if "user" not in session:
+                return redirect("/login")
+
+            if role and session["user"]["role"] != role and session["user"]["role"] != "admin":
+                return "Accès refusé", 403
+
+            return fn(*args, **kwargs)
+        return decorated
+    return wrapper
+
+
 def distance_m(lat1, lon1, lat2, lon2):
     R = 6371000
     p1 = math.radians(lat1)
     p2 = math.radians(lat2)
     dp = math.radians(lat2 - lat1)
     dl = math.radians(lon2 - lon1)
+
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def classify(obj):
     d = distance_m(obj["lat"], obj["lon"], BASE_LAT, BASE_LON)
+
     if d < 800:
         return "danger", "Intrusion dans zone sensible"
+
     if obj.get("speed", 0) < 8:
         return "watch", "Objet lent ou stationnaire"
+
     return "normal", "RAS"
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        code = request.form.get("code", "").strip()
+
+        if code in USERS:
+            session["user"] = USERS[code]
+
+            if USERS[code]["role"] == "tracker":
+                return redirect("/tracker")
+
+            return redirect("/")
+
+        return render_template("login.html", error="Code invalide")
+
+    return render_template("login.html", error=None)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
 @app.route("/")
+@login_required()
 def dashboard():
     return render_template("dashboard.html")
 
 
 @app.route("/tracker")
+@login_required()
 def tracker():
     return render_template("tracker.html")
 
@@ -59,32 +112,43 @@ def tracker():
 def update():
     data = request.json or {}
 
-    object_id = data.get("id", "PHONE-01")
+    try:
+        object_id = data.get("id", "PHONE-01")
 
-    obj = {
-        "id": object_id,
-        "type": data.get("type", "Téléphone GPS autorisé"),
-        "lat": float(data["lat"]),
-        "lon": float(data["lon"]),
-        "speed": round(float(data.get("speed", 0) or 0) * 3.6, 2),
-        "altitude": round(float(data.get("altitude", 0) or 0), 2),
-        "accuracy": round(float(data.get("accuracy", 0) or 0), 2),
-        "source": "GPS MOBILE",
-        "timestamp": time.time(),
-        "timestamp_mobile": data.get("timestamp_mobile", ""),
-        "media_active": bool(data.get("media_active", False))
-    }
+        obj = {
+            "id": object_id,
+            "type": data.get("type", "Téléphone GPS autorisé"),
+            "lat": float(data["lat"]),
+            "lon": float(data["lon"]),
+            "speed": round(float(data.get("speed", 0) or 0) * 3.6, 2),
+            "altitude": round(float(data.get("altitude", 0) or 0), 2),
+            "accuracy": round(float(data.get("accuracy", 0) or 0), 2),
+            "source": "GPS MOBILE",
+            "timestamp": time.time(),
+            "timestamp_mobile": data.get("timestamp_mobile", ""),
+            "media_active": bool(data.get("media_active", False))
+        }
 
-    status, alert = classify(obj)
-    obj["status"] = status
-    obj["alert"] = alert
+        status, alert = classify(obj)
+        obj["status"] = status
+        obj["alert"] = alert
 
-    tracked[object_id] = obj
+        tracked[object_id] = obj
 
-    return jsonify({"success": True, "object": obj})
+        return jsonify({
+            "success": True,
+            "object": obj
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
 
 
 @app.route("/api/objects")
+@login_required()
 def objects():
     now = time.time()
 
@@ -118,20 +182,30 @@ def objects():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "service": "SkyGuard-DRC"})
+    return jsonify({
+        "status": "ok",
+        "service": "SkyGuard-DRC"
+    })
 
 
 @socketio.on("register_tracker")
 def register_tracker(data):
     object_id = data.get("id", "PHONE-01")
     tracker_sockets[object_id] = request.sid
-    emit("tracker_registered", {"id": object_id, "sid": request.sid})
+
+    emit("tracker_registered", {
+        "id": object_id,
+        "sid": request.sid
+    })
 
 
 @socketio.on("register_dashboard")
 def register_dashboard():
     dashboard_sockets.add(request.sid)
-    emit("dashboard_registered", {"sid": request.sid})
+
+    emit("dashboard_registered", {
+        "sid": request.sid
+    })
 
 
 @socketio.on("call_tracker")
@@ -146,7 +220,9 @@ def call_tracker(data):
             "dashboard_sid": dashboard_sid
         }, room=tracker_sid)
     else:
-        emit("webrtc_error", {"message": "Tracker introuvable ou média non actif"})
+        emit("webrtc_error", {
+            "message": "Tracker introuvable ou média non actif"
+        })
 
 
 @socketio.on("webrtc_offer")
@@ -173,8 +249,6 @@ def disconnect():
     for object_id, tracker_sid in list(tracker_sockets.items()):
         if tracker_sid == sid:
             del tracker_sockets[object_id]
-
-
 
 
 if __name__ == "__main__":
