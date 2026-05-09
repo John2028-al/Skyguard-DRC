@@ -497,10 +497,25 @@ async function requestWakeLock(){
     try{
         if("wakeLock" in navigator){
             wakeLock = await navigator.wakeLock.request("screen");
-            console.log("Écran maintenu actif");
+            console.log("Wake Lock actif");
+
+            wakeLock.addEventListener("release", ()=>{
+                console.log("Wake Lock libéré");
+            });
         }
     }catch(e){
         console.log("WakeLock refusé :", e.message);
+    }
+}
+
+async function releaseWakeLock(){
+    try{
+        if(wakeLock){
+            await wakeLock.release();
+            wakeLock = null;
+        }
+    }catch(e){
+        console.log("Erreur libération WakeLock :", e.message);
     }
 }
 
