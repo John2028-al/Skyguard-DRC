@@ -453,6 +453,7 @@ async function startTracking(){
     document.getElementById("stopBtn").disabled = false;
 
     isTracking = true;
+     await requestWakeLock();
     sendCounter = 0;
     document.getElementById("sendCount").innerText = "0";
 
@@ -487,8 +488,33 @@ async function startTracking(){
     sendInterval = setInterval(sendToServer, 1000);
 }
 
+
+
+
+let wakeLock = null;
+
+async function requestWakeLock(){
+    try{
+        if("wakeLock" in navigator){
+            wakeLock = await navigator.wakeLock.request("screen");
+            console.log("Écran maintenu actif");
+        }
+    }catch(e){
+        console.log("WakeLock refusé :", e.message);
+    }
+}
+
+document.addEventListener("visibilitychange", async ()=>{
+    if(document.visibilityState === "visible" && isTracking){
+        await requestWakeLock();
+    }
+});
+
+
+
 function stopTracking(){
     isTracking = false;
+   
 
     if(watchId !== null){
         navigator.geolocation.clearWatch(watchId);
@@ -578,6 +604,14 @@ async function switchCamera(){
 
     await startMedia();
 }
+
+document.addEventListener("visibilitychange", ()=>{
+    if(document.hidden){
+        setMainStatus("Attention : gardez cette page ouverte pour maintenir GPS + vidéo actifs.", "bad");
+    }else if(isTracking){
+        setMainStatus("Suivi GPS actif — page visible", "good");
+    }
+});
 </script>
 
 </body>
