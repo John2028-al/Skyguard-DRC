@@ -519,17 +519,12 @@ async function releaseWakeLock(){
     }
 }
 
-document.addEventListener("visibilitychange", async ()=>{
-    if(document.visibilityState === "visible" && isTracking){
-        await requestWakeLock();
-    }
-});
 
 
-
-function stopTracking(){
+async function stopTracking(){
     isTracking = false;
-   
+
+    await releaseWakeLock();
 
     if(watchId !== null){
         navigator.geolocation.clearWatch(watchId);
@@ -620,11 +615,16 @@ async function switchCamera(){
     await startMedia();
 }
 
-document.addEventListener("visibilitychange", ()=>{
-    if(document.hidden){
-        setMainStatus("Attention : gardez cette page ouverte pour maintenir GPS + vidéo actifs.", "bad");
-    }else if(isTracking){
-        setMainStatus("Suivi GPS actif — page visible", "good");
+document.addEventListener("visibilitychange", async ()=>{
+    if(document.visibilityState === "visible"){
+        if(isTracking){
+            await requestWakeLock();
+            setMainStatus("Suivi GPS actif — page visible", "good");
+        }
+    }else{
+        if(isTracking){
+            setMainStatus("Attention : gardez cette page ouverte pour maintenir GPS + vidéo actifs.", "bad");
+        }
     }
 });
 </script>
